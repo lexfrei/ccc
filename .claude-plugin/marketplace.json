@@ -1,0 +1,121 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "claude-code-companions",
+  "description": "Collection of Claude Code plugins: specialized agents, code review skills, git workflows, dependency management, and observability",
+  "owner": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  },
+  "plugins": [
+    {
+      "name": "task-orchestrator",
+      "description": "Project analysis and planning agent — decomposes complex tasks, creates implementation plans, identifies risks and dependencies",
+      "source": "./agents/task-orchestrator",
+      "category": "development"
+    },
+    {
+      "name": "tech-oracle",
+      "description": "Technical architect agent — manages .architecture.yaml, creates ADRs, evaluates technology choices and design patterns",
+      "source": "./agents/tech-oracle",
+      "category": "development"
+    },
+    {
+      "name": "gopher-builder",
+      "description": "Go developer agent — TDD specialist for cloud-native Go applications with Echo, slog, and cockroachdb/errors",
+      "source": "./agents/gopher-builder",
+      "category": "development"
+    },
+    {
+      "name": "snake-charmer",
+      "description": "Python developer agent — TDD specialist treating code as art, with FastAPI, Pydantic, structlog, and strict typing",
+      "source": "./agents/snake-charmer",
+      "category": "development"
+    },
+    {
+      "name": "templ-weaver",
+      "description": "Frontend specialist — Go Templ + HTMX with server-first rendering and WCAG 2.1 AA accessibility",
+      "source": "./agents/templ-weaver",
+      "category": "development"
+    },
+    {
+      "name": "kube-pilot",
+      "description": "Kubernetes specialist — creates secure, production-ready K8s manifests and ArgoCD applications with zero-trust networking",
+      "source": "./agents/kube-pilot",
+      "category": "infrastructure"
+    },
+    {
+      "name": "chart-builder",
+      "description": "Helm chart TDD specialist — creates production-ready Helm charts with helm-unittest following .architecture.yaml standards",
+      "source": "./agents/chart-builder",
+      "category": "infrastructure"
+    },
+    {
+      "name": "docker-smith",
+      "description": "Containerization specialist — creates optimized, secure Containerfiles with multi-stage builds and distroless base images",
+      "source": "./agents/docker-smith",
+      "category": "infrastructure"
+    },
+    {
+      "name": "code-guardian",
+      "description": "Code quality validation agent — runs linters, tests, security checks, and verifies .architecture.yaml compliance",
+      "source": "./agents/code-guardian",
+      "category": "quality"
+    },
+    {
+      "name": "doc-curator",
+      "description": "AI artifact cleanup agent — detects and removes AI-generated comments, excessive documentation, and non-professional code patterns",
+      "source": "./agents/doc-curator",
+      "category": "quality"
+    },
+    {
+      "name": "review-toolkit",
+      "description": "Comprehensive code review pipeline: branch review, PR final review with dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification",
+      "source": "./skills/review-toolkit",
+      "category": "productivity"
+    },
+    {
+      "name": "git-tools",
+      "description": "Git workflow utilities: fork refresh and repo setup with branch protection",
+      "source": "./skills/git-tools",
+      "category": "productivity"
+    },
+    {
+      "name": "genname",
+      "description": "Generate a /rename command from type, title, and optional PR number — pure string formatting utility",
+      "source": "./skills/genname",
+      "category": "productivity"
+    },
+    {
+      "name": "tldrpr",
+      "description": "Generate concise plain-text TLDR summaries for GitHub Pull Requests, ready for pasting into Slack or other messengers",
+      "source": "./skills/tldrpr",
+      "category": "productivity"
+    },
+    {
+      "name": "learn",
+      "description": "Analyze the current session and extract key learnings into CLAUDE.md files and memory system",
+      "source": "./skills/learn",
+      "category": "productivity"
+    },
+    {
+      "name": "renovate-check",
+      "description": "Run Renovate locally in dry-run mode to discover available dependency updates, research migration guides for major bumps, and apply selected updates",
+      "source": "./skills/renovate-check",
+      "category": "development"
+    },
+    {
+      "name": "mcp-loki",
+      "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
+      "source": "./mcp/mcp-loki",
+      "category": "monitoring",
+      "homepage": "https://github.com/lexfrei/mcp-loki"
+    },
+    {
+      "name": "mcp-transmission",
+      "description": "MCP server for managing Transmission BitTorrent client — list, add, remove, start, stop torrents, session stats, queue and bandwidth management",
+      "source": "./mcp/mcp-transmission",
+      "category": "productivity",
+      "homepage": "https://github.com/lexfrei/mcp-transmission"
+    }
+  ]
+}
