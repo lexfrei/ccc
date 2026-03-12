@@ -1,0 +1,9 @@
+{
+  "name": "code-guardian",
+  "version": "1.0.0",
+  "description": "Code quality validation agent — runs linters, tests, security checks, and verifies .architecture.yaml compliance",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

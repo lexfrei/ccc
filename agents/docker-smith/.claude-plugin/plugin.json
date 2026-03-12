@@ -1,0 +1,9 @@
+{
+  "name": "docker-smith",
+  "version": "1.0.0",
+  "description": "Containerization specialist — creates optimized, secure Containerfiles with multi-stage builds and distroless base images",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

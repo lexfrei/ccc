@@ -1,0 +1,9 @@
+{
+  "name": "gopher-builder",
+  "version": "1.0.0",
+  "description": "Go developer agent — TDD specialist for cloud-native Go applications with Echo, slog, and cockroachdb/errors",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

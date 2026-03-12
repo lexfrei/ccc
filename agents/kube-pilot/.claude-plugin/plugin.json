@@ -1,0 +1,9 @@
+{
+  "name": "kube-pilot",
+  "version": "1.0.0",
+  "description": "Kubernetes specialist — creates secure, production-ready K8s manifests and ArgoCD applications with zero-trust networking",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

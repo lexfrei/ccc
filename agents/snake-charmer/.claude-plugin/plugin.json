@@ -1,0 +1,9 @@
+{
+  "name": "snake-charmer",
+  "version": "1.0.0",
+  "description": "Python developer agent — TDD specialist treating code as art, with FastAPI, Pydantic, structlog, and strict typing",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

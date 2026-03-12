@@ -1,0 +1,9 @@
+{
+  "name": "templ-weaver",
+  "version": "1.0.0",
+  "description": "Frontend specialist — Go Templ + HTMX with server-first rendering and WCAG 2.1 AA accessibility",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

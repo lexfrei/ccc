@@ -1,0 +1,9 @@
+{
+  "name": "task-orchestrator",
+  "version": "1.0.0",
+  "description": "Project analysis and planning agent — decomposes complex tasks, creates implementation plans, identifies risks and dependencies",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

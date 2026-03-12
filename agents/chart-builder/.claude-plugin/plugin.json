@@ -1,0 +1,9 @@
+{
+  "name": "chart-builder",
+  "version": "1.0.0",
+  "description": "Helm chart TDD specialist — creates production-ready Helm charts with helm-unittest following .architecture.yaml standards",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

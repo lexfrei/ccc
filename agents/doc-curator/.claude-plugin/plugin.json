@@ -1,0 +1,9 @@
+{
+  "name": "doc-curator",
+  "version": "1.0.0",
+  "description": "AI artifact cleanup agent — detects and removes AI-generated comments, excessive documentation, and non-professional code patterns",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

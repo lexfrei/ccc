@@ -1,0 +1,9 @@
+{
+  "name": "tech-oracle",
+  "version": "1.0.0",
+  "description": "Technical architect agent — manages .architecture.yaml, creates ADRs, evaluates technology choices and design patterns",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
