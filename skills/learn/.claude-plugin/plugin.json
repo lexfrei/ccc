@@ -1,0 +1,9 @@
+{
+  "name": "learn",
+  "version": "1.0.0",
+  "description": "Analyze the current session and extract key learnings into CLAUDE.md files and memory system",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

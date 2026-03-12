@@ -1,0 +1,9 @@
+{
+  "name": "renovate-check",
+  "version": "1.0.0",
+  "description": "Run Renovate locally in dry-run mode to discover available dependency updates, research migration guides for major bumps, and apply selected updates",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

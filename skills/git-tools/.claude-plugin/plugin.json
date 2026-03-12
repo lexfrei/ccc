@@ -1,0 +1,9 @@
+{
+  "name": "git-tools",
+  "version": "1.0.0",
+  "description": "Git workflow utilities: fork refresh and repo setup with branch protection",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "tldrpr",
+  "version": "1.0.0",
+  "description": "Generate concise plain-text TLDR summaries for GitHub Pull Requests, ready for pasting into Slack or other messengers",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
