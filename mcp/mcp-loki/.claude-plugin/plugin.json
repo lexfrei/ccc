@@ -1,0 +1,10 @@
+{
+  "name": "mcp-loki",
+  "version": "1.0.0",
+  "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
+  "homepage": "https://github.com/lexfrei/mcp-loki",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

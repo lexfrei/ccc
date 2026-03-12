@@ -1,0 +1,10 @@
+{
+  "name": "mcp-transmission",
+  "version": "1.0.0",
+  "description": "MCP server for managing Transmission BitTorrent client — list, add, remove, start, stop torrents, session stats, queue and bandwidth management",
+  "homepage": "https://github.com/lexfrei/mcp-transmission",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

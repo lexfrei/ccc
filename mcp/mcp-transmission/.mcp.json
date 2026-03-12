@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "mcp-transmission": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "TRANSMISSION_URL",
+        "-e", "TRANSMISSION_USERNAME",
+        "-e", "TRANSMISSION_PASSWORD",
+        "ghcr.io/lexfrei/mcp-transmission:latest"
+      ]
+    }
+  }
+}
