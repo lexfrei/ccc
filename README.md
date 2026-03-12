@@ -18,6 +18,22 @@ Then install any plugin:
 
 Or browse available plugins interactively via `/plugin` → **Discover** tab.
 
+## Updating
+
+Update all plugins from the marketplace:
+
+```bash
+/plugin marketplace update claude-code-companions
+```
+
+Update a specific plugin:
+
+```bash
+/plugin update <plugin-name>@claude-code-companions
+```
+
+Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `claude-code-companions` → **Enable auto-update**.
+
 ## Plugins
 
 ### Agents
