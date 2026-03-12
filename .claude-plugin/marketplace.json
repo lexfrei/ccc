@@ -104,6 +104,12 @@
       "category": "development"
     },
     {
+      "name": "agent-father",
+      "description": "Interactive skill for creating well-structured Claude Code subagents following official documentation standards",
+      "source": "./skills/agent-father",
+      "category": "development"
+    },
+    {
       "name": "mcp-loki",
       "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
       "source": "./mcp/mcp-loki",

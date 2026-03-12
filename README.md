@@ -45,6 +45,7 @@ Or browse available plugins interactively via `/plugin` → **Discover** tab.
 | **tldrpr** | Generate plain-text TLDR summaries for PRs, ready for Slack |
 | **learn** | Analyze the current session and extract key learnings into CLAUDE.md and memory |
 | **renovate-check** | Run Renovate locally in dry-run mode, research migration guides, apply selected updates |
+| **agent-father** | Interactive guide for creating Claude Code subagents following official documentation standards |
 
 ### MCP Servers
 
