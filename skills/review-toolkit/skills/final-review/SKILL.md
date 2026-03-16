@@ -46,11 +46,11 @@ Before looking at ANY code, understand WHY this change exists:
 
 Formulate a one-sentence summary of the business problem this PR solves. This frames the entire review — every finding must be evaluated against this context.
 
-## Step 3: Parallel Independent Reviews (Claude + Codex)
+## Step 3: Independent Reviews (Codex then Claude)
 
-Launch BOTH reviews in parallel for speed. Each model analyzes the diff independently. Verification happens AFTER both complete (Step 4).
+Run Codex first (blocking), then Claude's own analysis. Each model analyzes the diff independently. Verification happens AFTER both complete (Step 4).
 
-### Launch Codex review (background)
+### Launch Codex review (blocking)
 
 Check that `codex` CLI is available:
 
@@ -58,7 +58,7 @@ Check that `codex` CLI is available:
 command -v codex && codex --version
 ```
 
-If available, run `codex review` against the PR's base branch **in the background**. The `--base` flag and `[PROMPT]` argument are **mutually exclusive** — do NOT pass both:
+If available, run `codex review` against the PR's base branch **synchronously** (NOT in background). Use a 10-minute timeout. The `--base` flag and `[PROMPT]` argument are **mutually exclusive** — do NOT pass both:
 
 ```bash
 codex review --base $BASE_BRANCH --config 'sandbox_mode="danger-full-access"'
@@ -66,13 +66,15 @@ codex review --base $BASE_BRANCH --config 'sandbox_mode="danger-full-access"'
 
 Where `$BASE_BRANCH` is the PR's base ref obtained from `gh pr view` in Step 1 (e.g., `main`). The sandbox is fully disabled so Codex can run build tools, tests, and access the network without restrictions.
 
+**CRITICAL**: Do NOT use `run_in_background`. The Bash call MUST block until Codex completes. Save the full Codex output before proceeding.
+
 If `codex` is not installed: warn the user ("codex CLI not found — running Claude-only review. Install it to enable dual-model review.") and continue with Claude analysis alone.
 
 If the `codex review` command fails: warn and continue with Claude-only review.
 
-### Claude's own analysis (simultaneously)
+### Claude's own analysis
 
-While Codex runs in the background, perform Claude's independent analysis of the diff. At this stage, produce a RAW list of potential findings — do NOT verify them yet. Just identify concerns.
+After Codex completes (or if Codex is unavailable), perform Claude's independent analysis of the diff. At this stage, produce a RAW list of potential findings — do NOT verify them yet. Just identify concerns.
 
 ### Diff scope
 
@@ -104,7 +106,7 @@ Examine the code thoroughly for:
 
 ## Step 4: Verify All Findings (after BOTH reviews complete)
 
-**CRITICAL**: Do NOT proceed to this step until BOTH Claude's raw analysis AND Codex results are available. Wait for the Codex background task to complete.
+**CRITICAL**: Do NOT proceed to this step until BOTH Claude's raw analysis AND Codex results are available. Since Codex runs synchronously, both should be available at this point.
 
 Merge the raw finding lists from both models, then verify EVERY finding. An unverified claim is worse than no claim.
 
