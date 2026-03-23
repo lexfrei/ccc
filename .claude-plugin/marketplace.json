@@ -110,6 +110,12 @@
       "category": "development"
     },
     {
+      "name": "billy",
+      "description": "Where's the proof, Billy? — stop and prove a claim with deep investigation",
+      "source": "./skills/billy",
+      "category": "productivity"
+    },
+    {
       "name": "m4b-audiobook",
       "description": "Assemble m4b audiobook from audio files with chapters, metadata, and cover art using ffmpeg",
       "source": "./skills/m4b-audiobook",
