@@ -62,6 +62,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **learn** | Analyze the current session and extract key learnings into CLAUDE.md and memory |
 | **renovate-check** | Run Renovate locally in dry-run mode, research migration guides, apply selected updates |
 | **agent-father** | Interactive guide for creating Claude Code subagents following official documentation standards |
+| **m4b-audiobook** | Assemble m4b audiobook from audio files with chapters, metadata, and cover art |
 
 ### MCP Servers
 

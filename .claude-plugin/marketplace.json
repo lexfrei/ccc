@@ -110,6 +110,12 @@
       "category": "development"
     },
     {
+      "name": "m4b-audiobook",
+      "description": "Assemble m4b audiobook from audio files with chapters, metadata, and cover art using ffmpeg",
+      "source": "./skills/m4b-audiobook",
+      "category": "productivity"
+    },
+    {
       "name": "mcp-loki",
       "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
       "source": "./mcp/mcp-loki",

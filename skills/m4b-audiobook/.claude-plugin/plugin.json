@@ -1,0 +1,9 @@
+{
+  "name": "m4b-audiobook",
+  "version": "1.0.0",
+  "description": "Assemble m4b audiobook from audio files with chapters, metadata, and cover art using ffmpeg",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
