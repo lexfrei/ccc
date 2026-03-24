@@ -1,0 +1,9 @@
+{
+  "name": "say",
+  "version": "1.0.0",
+  "description": "Speak text aloud using macOS TTS with automatic voice selection",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

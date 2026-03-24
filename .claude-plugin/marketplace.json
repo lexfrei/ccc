@@ -122,6 +122,12 @@
       "category": "productivity"
     },
     {
+      "name": "say",
+      "description": "Speak text aloud using macOS TTS with automatic voice selection",
+      "source": "./skills/say",
+      "category": "productivity"
+    },
+    {
       "name": "mcp-loki",
       "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
       "source": "./mcp/mcp-loki",

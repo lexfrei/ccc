@@ -64,6 +64,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **agent-father** | Interactive guide for creating Claude Code subagents following official documentation standards |
 | **billy** | "Where's the proof, Billy?" — stop and prove a claim with deep investigation |
 | **m4b-audiobook** | Assemble m4b audiobook from audio files with chapters, metadata, and cover art |
+| **say** | Speak text aloud using macOS TTS with automatic voice selection |
 
 ### MCP Servers
 
