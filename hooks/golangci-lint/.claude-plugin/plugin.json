@@ -5,6 +5,5 @@
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
-  },
-  "hooks": "./hooks/hooks.json"
+  }
 }
