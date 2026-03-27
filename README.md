@@ -73,6 +73,12 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **mcp-loki** | [Grafana Loki](https://github.com/lexfrei/mcp-loki) — LogQL queries, label discovery, series exploration, index statistics |
 | **mcp-transmission** | [Transmission](https://github.com/lexfrei/mcp-transmission) — torrent management, session stats, queue and bandwidth control |
 
+### Hooks
+
+| Plugin | Description |
+| --- | --- |
+| **golangci-lint** | Auto-run golangci-lint on package when Go files are edited |
+
 ## License
 
 [BSD-3-Clause](LICENSE)

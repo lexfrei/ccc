@@ -140,6 +140,12 @@
       "source": "./mcp/mcp-transmission",
       "category": "productivity",
       "homepage": "https://github.com/lexfrei/mcp-transmission"
+    },
+    {
+      "name": "golangci-lint",
+      "description": "Auto-run golangci-lint on package when Go files are edited",
+      "source": "./hooks/golangci-lint",
+      "category": "quality"
     }
   ]
 }
