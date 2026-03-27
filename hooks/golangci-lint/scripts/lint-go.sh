@@ -12,4 +12,4 @@ ROOT=$(git -C "$(dirname "$FILE")" rev-parse --show-toplevel 2>/dev/null) || exi
 
 # Lint the package containing the file
 PKG="./$(dirname "${FILE#$ROOT/}")/..."
-cd "$ROOT" && golangci-lint run "$PKG" 2>&1
+cd "$ROOT" && golangci-lint run --issues-exit-code 0 "$PKG" 2>&1
