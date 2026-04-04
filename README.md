@@ -72,6 +72,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | --- | --- |
 | **mcp-loki** | [Grafana Loki](https://github.com/lexfrei/mcp-loki) — LogQL queries, label discovery, series exploration, index statistics |
 | **mcp-transmission** | [Transmission](https://github.com/lexfrei/mcp-transmission) — torrent management, session stats, queue and bandwidth control |
+| **mcp-tg** | [Telegram](https://github.com/lexfrei/mcp-tg) — MTProto client API, messaging, contacts, groups, channels, media handling |
 
 ### Hooks
 

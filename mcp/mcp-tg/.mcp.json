@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "mcp-tg": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-v", "~/.mcp-tg:/home/nobody/.mcp-tg",
+        "-e", "TELEGRAM_APP_ID",
+        "-e", "TELEGRAM_APP_HASH",
+        "ghcr.io/lexfrei/mcp-tg:latest"
+      ]
+    }
+  }
+}
