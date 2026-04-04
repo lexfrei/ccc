@@ -1,0 +1,10 @@
+{
+  "name": "mcp-tg",
+  "version": "1.0.0",
+  "description": "MCP server for Telegram Client API (MTProto) — messaging, contacts, groups, channels, media, stickers via user account",
+  "homepage": "https://github.com/lexfrei/mcp-tg",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

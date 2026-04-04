@@ -146,6 +146,13 @@
       "description": "Auto-run golangci-lint on package when Go files are edited",
       "source": "./hooks/golangci-lint",
       "category": "quality"
+    },
+    {
+      "name": "mcp-tg",
+      "description": "MCP server for Telegram Client API (MTProto) — messaging, contacts, groups, channels, media, stickers via user account",
+      "source": "./mcp/mcp-tg",
+      "category": "productivity",
+      "homepage": "https://github.com/lexfrei/mcp-tg"
     }
   ]
 }
