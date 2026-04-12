@@ -148,13 +148,6 @@
       "category": "quality"
     },
     {
-      "name": "macro-claude",
-      "description": "Session status hooks for the macro-claude macropad plugin — writes per-session JSON so the MX Creative Console shows live Claude Code state",
-      "source": "./hooks/macro-claude",
-      "category": "productivity",
-      "homepage": "https://github.com/lexfrei/macro-claude"
-    },
-    {
       "name": "mcp-tg",
       "description": "MCP server for Telegram Client API (MTProto) — messaging, contacts, groups, channels, media, stickers via user account",
       "source": "./mcp/mcp-tg",
