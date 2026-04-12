@@ -1,0 +1,11 @@
+{
+  "name": "macro-claude",
+  "version": "0.2.0",
+  "description": "Session status hooks for macro-claude macropad plugin — writes per-session JSON files that the Logi Plugin Service plugin reads to display live state on MX Creative Console keys",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  },
+  "repository": "https://github.com/lexfrei/macro-claude",
+  "keywords": ["macropad", "loupedeck", "session-status", "hooks"]
+}
