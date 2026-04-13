@@ -74,6 +74,12 @@
       "category": "productivity"
     },
     {
+      "name": "address-pr-comments",
+      "description": "End-to-end closeout of unresolved review comments across one or more GitHub PRs — verifies each thread, fixes legitimate findings with one signed commit per thread, posts approved replies, restores original branch",
+      "source": "./skills/address-pr-comments",
+      "category": "productivity"
+    },
+    {
       "name": "git-tools",
       "description": "Git workflow utilities: fork refresh and repo setup with branch protection",
       "source": "./skills/git-tools",

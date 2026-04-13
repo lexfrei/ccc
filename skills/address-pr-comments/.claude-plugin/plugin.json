@@ -1,0 +1,9 @@
+{
+  "name": "address-pr-comments",
+  "version": "1.0.0",
+  "description": "End-to-end closeout of unresolved review comments across one or more GitHub PRs — verify, fix with signed commits, post approved replies, restore original branch",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
