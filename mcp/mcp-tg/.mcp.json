@@ -3,7 +3,7 @@
     "mcp-tg": {
       "command": "docker",
       "args": [
-        "run", "--rm", "-i",
+        "run", "--rm", "-i", "--pull=always",
         "-v", "~/.mcp-tg:/home/nobody/.mcp-tg",
         "-e", "TELEGRAM_APP_ID",
         "-e", "TELEGRAM_APP_HASH",
