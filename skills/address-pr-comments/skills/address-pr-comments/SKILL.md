@@ -22,11 +22,11 @@ Before touching any PR branch:
 
 ```bash
 ORIGINAL_REF=$(git symbolic-ref --quiet --short HEAD || git rev-parse HEAD)
-CLEAN_START=$(git status --porcelain | wc -l | tr -d ' ')
+if [ -z "$(git status --porcelain)" ]; then CLEAN_START=1; else CLEAN_START=0; fi
 ```
 
 - `ORIGINAL_REF` is the branch to return to at the end.
-- `CLEAN_START == "0"` means the working tree was clean — safe to restore later.
+- `CLEAN_START == 1` means the working tree was clean — safe to restore later.
 - If the working tree is dirty, ask the user how to handle it (abort, stash, or proceed without final restore) BEFORE doing any `git checkout`.
 
 ## Step 1: Outer loop over PR refs
@@ -95,6 +95,8 @@ gh api "repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" --jq '.[] | {id, author: 
 ```
 
 For each unresolved thread, record: `threadId`, `path`, `line` (or `originalLine` when `line` is null), `author.login`, `bodyText`, `url`, and `isOutdated`.
+
+**Pagination guard**: if the query returns exactly 100 review threads or any thread has exactly 100 comments, the data was truncated. Either paginate via `pageInfo.hasNextPage`/`endCursor` or warn the user and ask whether to proceed on partial data.
 
 ## Step 5: Verify each thread against CURRENT code
 
@@ -211,7 +213,7 @@ Then proceed to the next PR ref (back to Step 2).
 After the final PR:
 
 ```bash
-if [ "$CLEAN_START" = "0" ]; then
+if [ "$CLEAN_START" = "1" ]; then
   git checkout "$ORIGINAL_REF"
 else
   echo "Staying on current branch — working tree was dirty at start."

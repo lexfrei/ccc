@@ -56,7 +56,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | Plugin | Description |
 | --- | --- |
 | **review-toolkit** | Code review pipeline: branch review, PR final review with dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification |
-| **address-pr-comments** | Close out unresolved review comments across one or more PRs — verify, fix with signed commits, post approved replies, restore original branch |
+| **address-pr-comments** | Close out unresolved review comments across one or more PRs — verify, fix with auto-pushed signed commits (one per thread), post user-approved replies, restore original branch |
 | **git-tools** | Git workflow utilities: fork refresh and repo setup with branch protection |
 | **genname** | Generate a `/rename` command from type, title, and optional PR number |
 | **tldrpr** | Generate plain-text TLDR summaries for PRs, ready for Slack |
