@@ -16,20 +16,42 @@ Parse $ARGUMENTS for:
 
 If no PR number and no PR exists for current branch, report error and stop.
 
-## Step 1: Sync to Remote
+## Step 1: Sync to Remote and Verify PR Scope
 
-Before any analysis, ensure local branch matches the remote PR head:
+Before any analysis, fetch ALL remote refs and verify the PR scope via GitHub API.
+
+**CRITICAL**: Local branches go stale. NEVER use bare `main` or `<base-branch>` in git diff — ALWAYS use `origin/<branch>`. A stale local branch produces phantom diffs that include already-merged commits, leading to false findings (e.g., claiming a PR needs rebasing when it doesn't).
 
 ```bash
-# Get PR head ref
-PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq .headRefName)
+# Fetch everything so origin/* refs are current
+git fetch origin
 
-# Fetch and reset to remote
-git fetch origin $PR_BRANCH
+# Get PR metadata from the API — this is the ONLY authoritative source for PR scope
+PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq .headRefName)
+PR_BASE=$(gh pr view $PR_NUMBER --json baseRefName --jq .baseRefName)
+
+# Checkout and reset to remote head
+git checkout $PR_BRANCH
 git reset --hard origin/$PR_BRANCH
+
+# Verify PR scope via API — do NOT trust local git diff for file count
+gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" --jq '{commits: .commits, changed_files: .changed_files}'
+gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/files" --jq '.[].filename'
+gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/commits" --jq '.[] | "\(.sha[:8]) \(.commit.message | split("\n")[0])"'
 ```
 
-Print the current commit hash and message so the user can confirm this is the right state.
+Print the current commit hash, commit count, file count, and file list so the user can confirm this is the right state. If the local `git diff origin/$PR_BASE...$PR_BRANCH --stat` shows different files than the API, **trust the API** and investigate the local discrepancy before proceeding.
+
+## Step 1.5: Check Bot Comments
+
+Read all comments and inline review comments from bots (CodeRabbit, Gemini Code Assist, etc.):
+
+```bash
+gh pr view $PR_NUMBER --json comments --jq '.comments[] | select(.author.is_bot == true or (.author.login | test("bot|coderabbit|gemini"; "i"))) | {author: .author.login, body: .body}'
+gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user.login | test("bot|coderabbit|gemini"; "i")) | {author: .user.login, path: .path, line: (.original_line // .line), body: .body}'
+```
+
+Note which bot findings are valid and which are noise. Check if the author has responded to bot comments. In the final review, remind the author to address unanswered bot comments if any are valid.
 
 ## Step 2: Parallel Analysis
 
@@ -170,9 +192,30 @@ Ask: "Publish this review?" and wait for explicit confirmation.
 
 If the user requests changes to the review text — apply them and re-present.
 
-## Step 8: Publish
+## Step 8: Publish (or Update Existing Review)
 
-Use the GitHub API to submit the review. Use `python3` with `json` module to properly serialize the payload (shell escaping of complex review bodies is unreliable):
+**CRITICAL**: Before creating a new review, check if you already have a review on this PR. Multiple reviews from the same user clutter the PR timeline and look unprofessional. If an existing review exists, UPDATE it instead of posting a new one.
+
+```bash
+# Check for existing review by the current user
+EXISTING_REVIEW_ID=$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
+  --jq "[.[] | select(.user.login == \"$(gh api user --jq .login)\")] | last | .id // empty")
+```
+
+### If updating an existing review
+
+```bash
+# Update the review body
+gh api --method PUT "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews/$EXISTING_REVIEW_ID" \
+  --field body="<new review body>"
+
+# To change the event (e.g., from REQUEST_CHANGES to APPROVE after fixes):
+# dismiss the old review, then submit a new one
+```
+
+### If creating a new review
+
+Use `python3` with `json` module to properly serialize the payload (shell escaping of complex review bodies is unreliable):
 
 ```python
 import json, subprocess
@@ -197,7 +240,7 @@ subprocess.run(
 )
 ```
 
-After publishing, print the review URL so the user can verify it rendered correctly.
+After publishing or updating, print the review URL so the user can verify it rendered correctly.
 
 ## Important Rules
 
@@ -207,3 +250,6 @@ After publishing, print the review URL so the user can verify it rendered correc
 - **Respect existing reviews**: Read existing review comments on the PR. Do not repeat points already made by other reviewers unless adding new evidence.
 - **One review, not a wall of text**: Keep inline comments focused and concise. The PR author should be able to act on each comment independently.
 - **No private infrastructure details**: Never mention cluster names, client names, internal IPs, or environment identifiers in public reviews.
+- **Address bot comments**: If bots (CodeRabbit, Gemini, etc.) left valid findings that the author hasn't responded to, include a general note asking the author to address them. Do not repeat bot findings verbatim — reference them.
+- **Update, don't duplicate**: If you already have a review on this PR, UPDATE the existing review body instead of creating a new one. Multiple reviews from the same person are noisy and unprofessional.
+- **Always use origin/ refs**: When computing diffs locally, ALWAYS use `origin/<branch>` — never bare branch names. Local branches go stale and produce phantom diffs that include already-merged commits.
