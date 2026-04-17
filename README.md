@@ -66,6 +66,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **billy** | "Where's the proof, Billy?" — stop and prove a claim with deep investigation |
 | **m4b-audiobook** | Assemble m4b audiobook from audio files with chapters, metadata, and cover art |
 | **say** | Speak text aloud using macOS TTS with automatic voice selection |
+| **slack-formatter** | Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved |
 
 ### MCP Servers
 
