@@ -134,6 +134,12 @@
       "category": "productivity"
     },
     {
+      "name": "slack-formatter",
+      "description": "Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved",
+      "source": "./skills/slack-formatter",
+      "category": "productivity"
+    },
+    {
       "name": "mcp-loki",
       "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
       "source": "./mcp/mcp-loki",
