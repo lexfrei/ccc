@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(gh *)",
+            "command": "${CLAUDE_PLUGIN_ROOT}/scripts/worksync-gh.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

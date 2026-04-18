@@ -81,6 +81,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | Plugin | Description |
 | --- | --- |
 | **golangci-lint** | Auto-run golangci-lint on package when Go files are edited |
+| **worksync** | Daily work-sync markdown log — PostToolUse hook captures `gh pr/issue create/merge/close` automatically, companion skill logs research/ops/checkpoint events (configurable vault via `$WORKSYNC_VAULT_DIR`, works with Obsidian, Logseq, or plain markdown) |
 
 ## License
 
