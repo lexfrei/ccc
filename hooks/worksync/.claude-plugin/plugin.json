@@ -1,11 +1,19 @@
 {
   "name": "worksync",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Automatic daily work-sync log — a PostToolUse hook captures gh pr/issue create/merge/close, and a companion skill lets Claude log research/ops/checkpoint events into a dated markdown note (great for feeding standups)",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
   },
   "repository": "https://github.com/lexfrei/ccc",
-  "keywords": ["hooks", "skills", "productivity", "standup", "obsidian", "markdown", "github"]
+  "keywords": ["hooks", "skills", "productivity", "standup", "obsidian", "markdown", "github"],
+  "userConfig": {
+    "vault_dir": {
+      "title": "Worksync note directory",
+      "type": "string",
+      "description": "Absolute path to the directory where daily work-sync notes will be written. Examples: ~/Documents/Obsidian/<vault>/worksync, ~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>/worksync. Leave blank to use ~/worksync.",
+      "sensitive": false
+    }
+  }
 }

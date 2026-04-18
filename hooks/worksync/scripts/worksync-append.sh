@@ -17,7 +17,11 @@
 
 set -euo pipefail
 
-VAULT_DIR="${WORKSYNC_VAULT_DIR:-$HOME/worksync}"
+# Precedence: shell/settings.json override > plugin userConfig > default.
+VAULT_DIR="${WORKSYNC_VAULT_DIR:-${CLAUDE_PLUGIN_OPTION_VAULT_DIR:-$HOME/worksync}}"
+# Expand leading tilde — userConfig values arrive as literal strings, so a
+# tilde-prefixed path would otherwise create a directory named literally ~.
+VAULT_DIR="${VAULT_DIR/#\~/$HOME}"
 
 TYPE="${1:?type required (pr|issue|merge|research|ops|checkpoint|note)}"
 MSG="${2:?message required}"
