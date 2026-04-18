@@ -167,6 +167,12 @@
       "homepage": "https://github.com/lexfrei/macro-claude"
     },
     {
+      "name": "worksync",
+      "description": "Automatic daily work-sync log — PostToolUse hook captures gh pr/issue create/merge/close, and a companion skill lets Claude log research/ops/checkpoint events into a dated markdown note (feeds standups via Obsidian/Logseq/plain markdown)",
+      "source": "./hooks/worksync",
+      "category": "productivity"
+    },
+    {
       "name": "mcp-tg",
       "description": "MCP server for Telegram Client API (MTProto) — messaging, contacts, groups, channels, media, stickers via user account",
       "source": "./mcp/mcp-tg",
