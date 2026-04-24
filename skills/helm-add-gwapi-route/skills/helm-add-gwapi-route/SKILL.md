@@ -53,8 +53,8 @@ Training data is frequently outdated on API maturity. Before generating any temp
 
 Fetch:
 
-- https://gateway-api.sigs.k8s.io/concepts/versioning/ — canonical maturity table.
-- https://kubernetes.io/blog/ — search for the latest Gateway API release post.
+- <https://gateway-api.sigs.k8s.io/concepts/versioning/> — canonical maturity table.
+- <https://kubernetes.io/blog/> — search for the latest Gateway API release post.
 
 Build a fresh status table covering every resource this skill generates: HTTPRoute, GRPCRoute, TLSRoute, TCPRoute, UDPRoute, BackendTLSPolicy, ReferenceGrant. Record the current apiVersion and channel (Standard / Experimental) for each.
 
@@ -69,7 +69,7 @@ This forces the model to actually perform the fetch rather than reuse cached cla
 **Minimum cluster Gateway API version required per route kind** — this is a separate question from current apiVersion and changes much less often. As a reference (still verify via the versioning page in case of controller-specific caveats):
 
 | Route kind | Min Gateway API version | Since |
-|---|---|---|
+| --- | --- | --- |
 | HTTPRoute | v1.0 | Oct 2023 |
 | GRPCRoute | v1.1 | May 2024 |
 | BackendTLSPolicy | v1.4 | Nov 2025 |
@@ -113,7 +113,7 @@ In **add-mode**, skip the discrepancy analysis.
 If `--type` is explicit, use it. Otherwise infer from Service ports captured in Phase 1:
 
 | Service port signal | Suggested route type |
-|---|---|
+| --- | --- |
 | `name: grpc`, `appProtocol: grpc`, `appProtocol: h2c` | GRPCRoute |
 | `name: http` / `web` / `api`, protocol TCP, `appProtocol: http` | HTTPRoute |
 | `name: https`, `appProtocol: tls` (SNI passthrough) | TLSRoute |
@@ -133,7 +133,11 @@ Two valid styles:
 httpRoute:
   enabled: false
   annotations: {}
+  # REQUIRED when enabled: the Gateway(s) this route attaches to. Empty list = no attachment = no traffic.
   parentRefs: []
+  #   - name: my-gateway
+  #     namespace: gateway-system
+  #     sectionName: https   # optional, binds to a specific listener on the Gateway
   hostnames: []
   rules:
     - name: default
@@ -151,7 +155,11 @@ httpRoute:
 ```yaml
 gateway:
   enabled: false
+  # REQUIRED when any nested route is enabled: the Gateway(s) the routes attach to.
   parentRefs: []
+  #   - name: my-gateway
+  #     namespace: gateway-system
+  #     sectionName: https
   httpRoute:
     enabled: true
     annotations: {}
@@ -168,7 +176,7 @@ gateway:
     rules: []
 ```
 
-`parentRefs` always defaults to `[]` — the cluster operator owns the Gateway resource; the chart should not assume its name.
+`parentRefs` always defaults to `[]` — the cluster operator owns the Gateway resource; the chart should not assume its name. A route with empty `parentRefs` never attaches to a Gateway and receives no traffic; flag this explicitly in both the values.yaml comment above the field and in NOTES.txt (Phase 7) so users know to fill it in before enabling the route.
 
 **TLSRoute / TCPRoute / UDPRoute parentRefs need `sectionName`.** These route kinds bind to a specific listener on the Gateway (by port and protocol), not to the Gateway as a whole. When generating a values example for any of these, include `sectionName` in the commented parentRefs example so users understand:
 
@@ -227,8 +235,10 @@ spec:
       {{- with .name }}
       name: {{ . | quote }}
       {{- end }}
+      {{- with .matches }}
       matches:
-        {{- toYaml .matches | nindent 8 }}
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       {{- with .filters }}
       filters:
         {{- toYaml . | nindent 8 }}
@@ -247,6 +257,8 @@ spec:
     {{- end }}
 {{- end }}
 ```
+
+Matches is wrapped in `{{- with .matches }}` because HTTPRoute (and GRPCRoute) treat a missing `matches` field as "match all" — valid and sometimes intended. Rendering `matches: null` from `toYaml nil` would be rejected by CRD validators. The same `{{- with }}` guard applies to the GRPCRoute template.
 
 #### templates/grpcroute.yaml
 
@@ -359,6 +371,27 @@ Include commented-out examples for common patterns so users can uncomment rather
 
 **update-mode:** insert new fields (e.g. `filters: []` when CORS migration is selected, `name: default` on existing unnamed rules) with minimum surrounding changes.
 
+### BackendTLSPolicy values block
+
+When `--with-backend-tls` is set (or an HTTPS backend port was detected and the user confirmed), also add the corresponding values block near the route block:
+
+```yaml
+backendTLSPolicy:
+  enabled: false
+  # Expected SNI hostname the backend Service presents on its TLS certificate.
+  hostname: ""
+  # Set ONE of the two fields below — the spec requires them to be mutually exclusive.
+  # caCertificateRefs: References to ConfigMaps holding PEM CA bundles.
+  caCertificateRefs: []
+  #   - group: ""
+  #     kind: ConfigMap
+  #     name: backend-ca
+  # wellKnownCACertificates: "System" to trust the controller's system CA roots.
+  wellKnownCACertificates: ""
+```
+
+Place the `backendTLSPolicy:` block adjacent to the route block for discoverability.
+
 ### NOTES.txt
 
 If the chart has `templates/NOTES.txt`, append a block describing how to inspect the newly added route(s) post-install. Example:
@@ -366,6 +399,12 @@ If the chart has `templates/NOTES.txt`, append a block describing how to inspect
 ```text
 {{- if .Values.httpRoute.enabled }}
 HTTPRoute '{{ include "<chart>.fullname" . }}' was created.
+{{- if not .Values.httpRoute.parentRefs }}
+
+WARNING: httpRoute.parentRefs is empty. The route will not attach to any Gateway
+and no traffic will reach the Service. Edit values.yaml to set parentRefs to the
+Gateway managed by your cluster operator, then run `helm upgrade`.
+{{- end }}
 Verify it is accepted by the parent Gateway:
     kubectl --namespace {{ .Release.Namespace }} get httproute {{ include "<chart>.fullname" . }} --output yaml
     kubectl --namespace {{ .Release.Namespace }} describe httproute {{ include "<chart>.fullname" . }}
@@ -375,7 +414,7 @@ Check that the parentRefs resolve and the route is attached:
 {{- end }}
 ```
 
-Adapt the kind name (HTTPRoute → GRPCRoute / TLSRoute / TCPRoute / UDPRoute) for each generated route type. If NOTES.txt does not exist and the chart has no other notes, skip this step — do not create a new NOTES.txt just for the route.
+Adapt the kind name (HTTPRoute → GRPCRoute / TLSRoute / TCPRoute / UDPRoute) for each generated route type. Preserve the trailing newline of the existing NOTES.txt when appending. If NOTES.txt does not exist and the chart has no other notes, skip this step — do not create a new NOTES.txt just for the route.
 
 ## Phase 8 — Optional helm-unittest test
 
