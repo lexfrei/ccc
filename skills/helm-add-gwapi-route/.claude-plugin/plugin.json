@@ -1,0 +1,9 @@
+{
+  "name": "helm-add-gwapi-route",
+  "version": "1.0.0",
+  "description": "Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Supports both adding routes to charts that lack them and updating existing routes to current Gateway API v1.5 best practices (named rules, typed filters, current apiVersion, optional BackendTLSPolicy).",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
