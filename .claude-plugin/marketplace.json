@@ -141,7 +141,7 @@
     },
     {
       "name": "helm-add-gwapi-route",
-      "description": "Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart, mirroring its ingress conventions. Auto-detects add vs update mode, applies current best practices (named rules, typed filters, optional BackendTLSPolicy), and only edits files",
+      "description": "Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart, mirroring its ingress conventions. Auto-detects add vs update mode per route kind, applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only — no git operations, no push, no PR",
       "source": "./skills/helm-add-gwapi-route",
       "category": "infrastructure"
     },

@@ -14,7 +14,7 @@ Invoke proactively (without an explicit user command) when any of these hold:
 
 - cwd is a Helm chart (Chart.yaml with `apiVersion: v2`) that has `templates/ingress.yaml` but no `templates/*route.yaml` — candidate for add-mode.
 - cwd has `templates/httproute.yaml` / `grpcroute.yaml` / `tlsroute.yaml` declaring `gateway.networking.k8s.io/v1beta1` or `v1alpha2` for resources that are now GA at `v1` — candidate for update-mode.
-- cwd has `*Route` templates whose rules lack the `name` field (named rules are best practice since Gateway API v1.4, November 2025).
+- cwd has `*Route` templates whose rules lack the `name` field (named rules are best practice since Gateway API v1.4).
 - The user mentions migrating a chart from Ingress to Gateway API, adding HTTPRoute/GRPCRoute/TLSRoute support, "gwapi", or modernizing existing routes.
 
 Do not invoke when:
@@ -66,32 +66,44 @@ Verified via WebFetch at <ISO8601 timestamp>: HTTPRoute=v1 (Standard), GRPCRoute
 
 This forces the model to actually perform the fetch rather than reuse cached claims.
 
-**Minimum cluster Gateway API version required per route kind** — this is a separate question from current apiVersion and changes much less often. As a reference (still verify via the versioning page in case of controller-specific caveats):
+**Minimum cluster Gateway API version required per route kind** — this is a separate question from current apiVersion and changes much less often. As a reference (still verify via the versioning page in case of controller-specific caveats; dates are omitted because they date-drift and the version number alone is enough to gate on):
 
-| Route kind | Min Gateway API version | Since |
-| --- | --- | --- |
-| HTTPRoute | v1.0 | Oct 2023 |
-| GRPCRoute | v1.1 | May 2024 |
-| BackendTLSPolicy | v1.4 | Nov 2025 |
-| Named rules on HTTPRoute/GRPCRoute | v1.4 | Nov 2025 |
-| CORS filter in Standard channel | v1.5 | Mar 2026 |
-| TLSRoute | v1.5 | Mar 2026 |
-| TCPRoute / UDPRoute | Experimental (no GA yet) | — |
+| Route kind / feature | Min Gateway API version |
+| --- | --- |
+| HTTPRoute | v1.0 |
+| GRPCRoute | v1.1 |
+| HTTPRoute timeouts | v1.2 |
+| BackendTLSPolicy | v1.4 |
+| Named rules on HTTPRoute/GRPCRoute | v1.4 |
+| CORS filter in Standard channel | v1.5 |
+| TLSRoute | v1.5 |
+| TCPRoute / UDPRoute | Experimental (no GA yet) |
 
 Surface the relevant minimum version(s) in Phase 10's PR body so users can gate on controller support.
 
 ## Phase 3 — Determine mode (add vs update)
 
-If `--mode` is given, use it. Otherwise decide by template presence from Phase 1:
+If `--mode` is given, use it and apply it to every selected route kind uniformly.
 
-- **add** — no existing `templates/*route.yaml` files.
-- **update** — at least one exists.
+Otherwise, `--mode=auto` is resolved **per route kind**, not per chart:
+
+- For each route kind selected in Phase 4, check whether the corresponding `templates/<kind>.yaml` exists.
+- If it does not exist → that kind is in **add-mode**.
+- If it exists → that kind is in **update-mode**.
+
+This handles the common mixed case where a chart already has `httproute.yaml` and the user wants to add a brand-new `grpcroute.yaml` at the same time: HTTPRoute gets update-mode review, GRPCRoute gets add-mode generation.
+
+In the rest of this document, references to "add-mode" and "update-mode" are per-kind decisions.
 
 In **update-mode**, for each existing `*route.yaml`:
 
 1. Render it with `helm template <chart-path>` using default values (and, if the route is gated by `enabled`, with `--set <route>.enabled=true` plus minimal required fields) to get the effective YAML.
 2. Compare against the current-spec checklist:
-   - apiVersion — is it still GA? E.g. GRPCRoute v1beta1 → should be v1.
+   - apiVersion — per-kind judgement, not a blanket rule:
+     - HTTPRoute `v1beta1` still coexists with `v1` in the Standard channel (v1beta1 was not removed at v1 GA). Bumping it silently breaks compatibility with controllers that only serve v1beta1. **Do not auto-bump HTTPRoute v1beta1 → v1; ask the user.**
+     - GRPCRoute `v1alpha2` / `v1beta1` → `v1` is a safe bump where v1 is available (graduated v1.1). Treat as safe.
+     - TLSRoute `v1alpha2` → `v1` is a safe bump where v1 is available (graduated v1.5). Treat as safe.
+     - TCPRoute / UDPRoute — still `v1alpha2`; no bump to propose.
    - does each `rules[]` entry have a `name` field? (v1.4+ best practice)
    - are CORS/auth/rate-limit headers implemented via ingress-style annotations rather than typed `filters`?
    - is there an HTTPS backend port (443, `appProtocol: https`, `name: https`) but no `BackendTLSPolicy`?
@@ -161,7 +173,7 @@ gateway:
   #     namespace: gateway-system
   #     sectionName: https
   httpRoute:
-    enabled: true
+    enabled: false
     annotations: {}
     hostnames: []
     rules:
@@ -173,7 +185,8 @@ gateway:
   grpcRoute:
     enabled: false
     hostnames: []
-    rules: []
+    rules:
+      - name: default
 ```
 
 `parentRefs` always defaults to `[]` — the cluster operator owns the Gateway resource; the chart should not assume its name. A route with empty `parentRefs` never attaches to a Gateway and receives no traffic; flag this explicitly in both the values.yaml comment above the field and in NOTES.txt (Phase 7) so users know to fill it in before enabling the route.
@@ -211,6 +224,9 @@ If the chart uses a non-standard structure (e.g. `.Values.server.port`, `.Values
 
 ```yaml
 {{- if .Values.httpRoute.enabled -}}
+{{- if not .Values.httpRoute.parentRefs -}}
+{{- fail "httpRoute.enabled=true but httpRoute.parentRefs is empty. A route without parentRefs cannot attach to a Gateway. Set httpRoute.parentRefs to the Gateway(s) managed by your cluster operator." -}}
+{{- end -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -260,9 +276,15 @@ spec:
 
 Matches is wrapped in `{{- with .matches }}` because HTTPRoute (and GRPCRoute) treat a missing `matches` field as "match all" — valid and sometimes intended. Rendering `matches: null` from `toYaml nil` would be rejected by CRD validators. The same `{{- with }}` guard applies to the GRPCRoute template.
 
+The same `{{- if not .Values.<route>.parentRefs -}}{{- fail ... -}}{{- end -}}` guard applies to every route template (GRPCRoute, TLSRoute, TCPRoute, UDPRoute): a route with empty parentRefs cannot attach to a Gateway and produces an invalid manifest rejected by kube-apiserver. Fail fast at template time so `helm install` never creates a broken route.
+
 #### templates/grpcroute.yaml
 
-Structurally identical to HTTPRoute. Differences: `kind: GRPCRoute`, default `matches` is `[{ method: { type: Exact, service: "", method: "" } }]` with empty values for the user to fill in. `filters` are still supported (v1 GA).
+Structurally identical to HTTPRoute. Differences:
+
+- `kind: GRPCRoute`
+- `filters` are still supported (v1 GA).
+- **No default `matches`.** GRPCRoute treats a missing `matches` field as "match all", just like HTTPRoute. Do not emit a default matcher with empty strings (`service: "", method: ""`) — GRPCRoute's CRD schema requires non-empty values for `type: Exact` matchers, so the default would fail server-side validation. Let users omit `matches` for match-all, or populate real service/method strings when they need scoping.
 
 #### templates/tlsroute.yaml
 
@@ -352,7 +374,7 @@ Include commented-out examples for common patterns so users can uncomment rather
   #           type: PathPrefix
   #           value: /api
   #     filters:
-  #       # CORS filter is Standard-channel since Gateway API v1.5 (Mar 2026).
+  #       # CORS filter is Standard-channel since Gateway API v1.5.
   #       # On older clusters it is Experimental and may not be supported.
   #       - type: CORS
   #         cors:
@@ -449,7 +471,7 @@ helm lint --strict <chart-path>
 helm template <chart-path>
 ```
 
-Use `--strict` — it surfaces deprecation warnings and unused values that plain `lint` misses.
+Use `--strict` — it turns lint warnings (deprecation messages, missing `icon` in Chart.yaml, templating warnings) into failures so they don't get ignored. If the chart has a `values.schema.json`, schema validation against defaults happens regardless of `--strict`.
 
 The default render should NOT include any *Route resource (all `enabled: false`).
 
@@ -501,10 +523,16 @@ Produce a summary:
 2. **Detected API status** — the apiVersion table from Phase 2, highlighting any change vs training-data expectations.
 3. **Files created / modified** — absolute paths.
 4. **Applied changes** — list of what was added/patched (e.g. "added name: default to rules[0]", "migrated CORS annotation to filter").
-5. **Suggested commit message** (English, semantic commit):
-   - add-mode: `feat(<chart>): add HTTPRoute template for Gateway API support`
-   - update-mode: `chore(<chart>): modernize HTTPRoute template to Gateway API v1.5 spec`
-6. **Suggested PR title and draft body** (English). The body should state: mode (add/update), affected route types, API channel (Standard GA vs Experimental), and Gateway API minimum version required (≥ v1.4 for named rules, ≥ v1.5 for CORS filter GA).
+5. **Suggested commit message** (English, semantic commit). Include the full message body and the `Assisted-By` trailer required by repo/global CLAUDE.md:
+   - add-mode subject: `feat(<chart>): add HTTPRoute template for Gateway API support`
+   - update-mode subject: `chore(<chart>): modernize HTTPRoute template to current Gateway API spec`
+   - body: one sentence per change (what and why), then a blank line, then:
+
+     ```text
+     Assisted-By: Claude <noreply@anthropic.com>
+     ```
+
+6. **Suggested PR title and draft body** (English). The body should state: mode (add/update), affected route types, API channel (Standard GA vs Experimental), and Gateway API minimum version required per kind (look up each touched kind in the Phase 2 min-version table — do not state a single universal floor).
 7. **Reminder** — git operations (branch, commit, push, PR) are the caller's responsibility. The skill did not run any.
 
 ## Guardrails

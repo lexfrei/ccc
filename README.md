@@ -67,7 +67,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **m4b-audiobook** | Assemble m4b audiobook from audio files with chapters, metadata, and cover art |
 | **say** | Speak text aloud using macOS TTS with automatic voice selection |
 | **slack-formatter** | Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved |
-| **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode; applies current best practices (named rules, typed filters, optional BackendTLSPolicy) |
+| **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode per route kind; applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only — no git operations |
 
 ### MCP Servers
 
