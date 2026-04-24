@@ -44,7 +44,7 @@ Parse `$ARGUMENTS`:
 5. Parse `values.yaml`:
    - extract the `ingress:` block — record its indent style (2 vs 4 spaces), field naming (`host` vs `hostname`, `path` vs `paths`, `className` style), whether helm-docs `# -- description` comments are used, and the values of any CORS/auth/rate-limit annotations (these are migration targets in update-mode)
    - extract the `service:` block — port number, port name, `protocol`, `appProtocol`, type
-   - detect any existing `gateway:`, `httpRoute:`, `grpcRoute:`, `tlsRoute:`, `tcpRoute:`, `udpRoute:` blocks
+   - detect any existing `httpRoute:`, `grpcRoute:`, `tlsRoute:`, `tcpRoute:`, `udpRoute:` top-level blocks (flat style is canonical; if a chart already uses a nested `gateway:` block, preserve its structure in update-mode rather than flattening)
 6. Read `_helpers.tpl`. Extract the exact helper template names the chart defines — typically `<chart>.fullname`, `<chart>.labels`, `<chart>.selectorLabels`, `<chart>.serviceAccountName`. Use the actual names in generated templates; do not assume the prefix matches the directory name.
 
 ## Phase 2 — Verify current Gateway API spec
@@ -135,21 +135,20 @@ If `--type` is explicit, use it. Otherwise infer from Service ports captured in 
 
 If TCPRoute or UDPRoute is selected, warn the user: those resources are still experimental (v1alpha2) and may see breaking changes in future Gateway API releases.
 
-## Phase 5 — Choose values.yaml style (add-mode only)
+## Phase 5 — Shape the values.yaml blocks (add-mode only)
 
-Two valid styles:
-
-**Flat** — use when adding exactly one route type and the chart has no existing `gateway:` block. Matches the jellyfin/longhorn PR style:
+Use a flat top-level block per route kind. This matches the jellyfin-helm ([PR #86](https://github.com/jellyfin/jellyfin-helm/pull/86)) and longhorn ([PR #11911](https://github.com/longhorn/longhorn/pull/11911)) conventions already accepted upstream, and keeps each kind self-contained:
 
 ```yaml
 httpRoute:
   enabled: false
   annotations: {}
-  # REQUIRED when enabled: the Gateway(s) this route attaches to. Empty list = no attachment = no traffic.
+  # REQUIRED when enabled: the Gateway(s) this route attaches to.
+  # An empty list is an installation error (template will fail explicitly).
   parentRefs: []
   #   - name: my-gateway
   #     namespace: gateway-system
-  #     sectionName: https   # optional, binds to a specific listener on the Gateway
+  #     sectionName: https   # optional; binds to a specific listener on the Gateway
   hostnames: []
   rules:
     - name: default
@@ -162,36 +161,11 @@ httpRoute:
       # backendRefs: []
 ```
 
-**Nested** — use when adding multiple route types or the chart already has a `gateway:` block:
+When multiple route kinds are being added to the same chart, emit multiple top-level blocks side-by-side — `httpRoute:`, `grpcRoute:`, `tlsRoute:` etc. — not one nested `gateway:` block. The flat structure means each kind has its own `enabled`, `parentRefs`, and `rules`, matching the template code in Phase 6 without any path-rewriting.
 
-```yaml
-gateway:
-  enabled: false
-  # REQUIRED when any nested route is enabled: the Gateway(s) the routes attach to.
-  parentRefs: []
-  #   - name: my-gateway
-  #     namespace: gateway-system
-  #     sectionName: https
-  httpRoute:
-    enabled: false
-    annotations: {}
-    hostnames: []
-    rules:
-      - name: default
-        matches:
-          - path:
-              type: PathPrefix
-              value: /
-  grpcRoute:
-    enabled: false
-    hostnames: []
-    rules:
-      - name: default
-```
+`parentRefs` always defaults to `[]` — the cluster operator owns the Gateway resource; the chart should not assume its name. A route with empty `parentRefs` never attaches to a Gateway and receives no traffic; the Phase 6 templates `{{ fail }}` on this state so `helm install` never creates a broken manifest. Flag it in both the values.yaml comment (above) and in NOTES.txt (Phase 7) so users know to fill it in before enabling.
 
-`parentRefs` always defaults to `[]` — the cluster operator owns the Gateway resource; the chart should not assume its name. A route with empty `parentRefs` never attaches to a Gateway and receives no traffic; flag this explicitly in both the values.yaml comment above the field and in NOTES.txt (Phase 7) so users know to fill it in before enabling the route.
-
-**TLSRoute / TCPRoute / UDPRoute parentRefs need `sectionName`.** These route kinds bind to a specific listener on the Gateway (by port and protocol), not to the Gateway as a whole. When generating a values example for any of these, include `sectionName` in the commented parentRefs example so users understand:
+**TLSRoute / TCPRoute / UDPRoute parentRefs need `sectionName`.** These route kinds bind to a specific listener on the Gateway (by port and protocol), not to the Gateway as a whole. Include `sectionName` in the commented parentRefs example for any of these:
 
 ```yaml
   # parentRefs:
@@ -206,7 +180,9 @@ gateway:
 
 All placeholders `<chart>` must be replaced with the real helper name captured in Phase 1.
 
-Use the apiVersion table built in Phase 2 — do not hardcode versions from this document.
+**apiVersion selection.** The template snippets below use `gateway.networking.k8s.io/v1` — the current Standard-channel version for HTTPRoute, GRPCRoute, and TLSRoute. That is correct for charts that target Gateway API ≥ v1.5 (the floor for TLSRoute). If the chart documents a lower Gateway API floor (e.g. HTTPRoute-only chart targeting v1.0), substitute the minimum apiVersion that still carries the kind in the Standard channel — check the table you built in Phase 2. Do not use `v1beta1` unless the chart explicitly supports controllers that only serve v1beta1; `v1` is the default.
+
+For TCPRoute and UDPRoute, use `v1alpha2` — they have no Standard-channel version yet.
 
 **Backend port resolution.** The default `backendRefs` entry points to the chart's own Service. Two common conventions in `values.yaml`:
 
@@ -245,8 +221,9 @@ spec:
   hostnames:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- with .Values.httpRoute.rules }}
   rules:
-    {{- range .Values.httpRoute.rules }}
+    {{- range . }}
     -
       {{- with .name }}
       name: {{ . | quote }}
@@ -271,8 +248,11 @@ spec:
           port: {{ $.Values.service.port }}
         {{- end }}
     {{- end }}
+  {{- end }}
 {{- end }}
 ```
+
+The outer `{{- with .Values.httpRoute.rules }}` guards the entire `rules:` block — if `rules` is empty or nil, nothing is emitted (not even the key), which avoids `rules: null` errors from CRD validation. Apply the same guard to every route template (GRPCRoute, TLSRoute, TCPRoute, UDPRoute).
 
 Matches is wrapped in `{{- with .matches }}` because HTTPRoute (and GRPCRoute) treat a missing `matches` field as "match all" — valid and sometimes intended. Rendering `matches: null` from `toYaml nil` would be rejected by CRD validators. The same `{{- with }}` guard applies to the GRPCRoute template.
 
@@ -283,7 +263,7 @@ The same `{{- if not .Values.<route>.parentRefs -}}{{- fail ... -}}{{- end -}}` 
 Structurally identical to HTTPRoute. Differences:
 
 - `kind: GRPCRoute`
-- `filters` are still supported (v1 GA).
+- **Filters are a subset of HTTPRoute's.** GRPCRoute supports `RequestHeaderModifier`, `ResponseHeaderModifier`, `RequestMirror`, and `ExtensionRef`. It does **not** support `URLRewrite`, `RequestRedirect`, or `CORS` — those are HTTPRoute-only. Do not emit those filter types as defaults or commented examples under the GRPCRoute values block.
 - **No default `matches`.** GRPCRoute treats a missing `matches` field as "match all", just like HTTPRoute. Do not emit a default matcher with empty strings (`service: "", method: ""`) — GRPCRoute's CRD schema requires non-empty values for `type: Exact` matchers, so the default would fail server-side validation. Let users omit `matches` for match-all, or populate real service/method strings when they need scoping.
 
 #### templates/tlsroute.yaml
@@ -292,6 +272,9 @@ No `filters`. `hostnames` are SNI names. Rules contain only `backendRefs`:
 
 ```yaml
 {{- if .Values.tlsRoute.enabled -}}
+{{- if not .Values.tlsRoute.parentRefs -}}
+{{- fail "tlsRoute.enabled=true but tlsRoute.parentRefs is empty. Set tlsRoute.parentRefs (including sectionName for the tls-passthrough listener) to the Gateway(s) managed by your cluster operator." -}}
+{{- end -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: TLSRoute
 metadata:
@@ -306,8 +289,9 @@ spec:
   hostnames:
     {{- toYaml . | nindent 4 }}
   {{- end }}
+  {{- with .Values.tlsRoute.rules }}
   rules:
-    {{- range .Values.tlsRoute.rules }}
+    {{- range . }}
     -
       {{- with .name }}
       name: {{ . | quote }}
@@ -320,6 +304,7 @@ spec:
           port: {{ $.Values.service.port }}
         {{- end }}
     {{- end }}
+  {{- end }}
 {{- end }}
 ```
 
@@ -483,14 +468,7 @@ helm template <chart-path> --set httpRoute.enabled=true \
   --set 'httpRoute.hostnames[0]=test.example.com'
 ```
 
-For nested style:
-
-```bash
-helm template <chart-path> --set gateway.enabled=true \
-  --set gateway.httpRoute.enabled=true \
-  --set 'gateway.parentRefs[0].name=test' \
-  --set 'gateway.httpRoute.hostnames[0]=test.example.com'
-```
+Add a similar invocation per route kind being added — each kind has its own top-level block.
 
 ### Server-side validation (optional but recommended)
 
