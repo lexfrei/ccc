@@ -203,6 +203,9 @@ If the chart uses a non-standard structure (e.g. `.Values.server.port`, `.Values
 {{- if not .Values.httpRoute.parentRefs -}}
 {{- fail "httpRoute.enabled=true but httpRoute.parentRefs is empty. A route without parentRefs cannot attach to a Gateway. Set httpRoute.parentRefs to the Gateway(s) managed by your cluster operator." -}}
 {{- end -}}
+{{- if not .Values.httpRoute.rules -}}
+{{- fail "httpRoute.enabled=true but httpRoute.rules is empty. HTTPRouteSpec.rules has MinItems=1 in the v1 CRD — an HTTPRoute without rules is rejected by kube-apiserver." -}}
+{{- end -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -252,7 +255,9 @@ spec:
 {{- end }}
 ```
 
-The outer `{{- with .Values.httpRoute.rules }}` guards the entire `rules:` block — if `rules` is empty or nil, nothing is emitted (not even the key), which avoids `rules: null` errors from CRD validation. Apply the same guard to every route template (GRPCRoute, TLSRoute, TCPRoute, UDPRoute).
+The outer `{{- with .Values.httpRoute.rules }}` serves two purposes: (a) it avoids emitting `rules: null` when the list is nil (which would fail schema type validation), and (b) combined with the top-level `{{ fail }}` guard above, it prevents rendering an HTTPRoute with an empty `rules:` list, which is invalid because `HTTPRouteSpec.rules` has `MinItems=1` in the v1 CRD (confirmed in `apis/v1/httproute_types.go`).
+
+Apply the `{{- with }}` guard around `rules:` to every route template. For HTTPRoute, also apply the empty-rules `{{ fail }}` guard above — this is HTTPRoute-specific because its spec mandates MinItems=1. GRPCRoute, TLSRoute, TCPRoute, and UDPRoute do not have that MinItems constraint (verified in their respective Go types), so for those kinds the `{{- with }}` guard alone is sufficient and no `{{ fail }}` is needed for empty rules.
 
 Matches is wrapped in `{{- with .matches }}` because HTTPRoute (and GRPCRoute) treat a missing `matches` field as "match all" — valid and sometimes intended. Rendering `matches: null` from `toYaml nil` would be rejected by CRD validators. The same `{{- with }}` guard applies to the GRPCRoute template.
 
@@ -268,7 +273,9 @@ Structurally identical to HTTPRoute. Differences:
 
 #### templates/tlsroute.yaml
 
-No `filters`. `hostnames` are SNI names. Rules contain only `backendRefs`:
+No `filters`. `hostnames` are SNI names and are **optional** per the TLSRoute spec (`apis/v1alpha2/tlsroute_types.go` marks them `+optional` with only `MaxItems=16`, no `MinItems`). A TLSRoute with no hostnames matches all SNIs allowed by the parent listener. Do not treat `hostnames` as required or add a `{{ fail }}` guard for it.
+
+Rules contain only `backendRefs`:
 
 ```yaml
 {{- if .Values.tlsRoute.enabled -}}
@@ -430,12 +437,17 @@ Only if `tests/` exists in the chart (see Phase 1). Add or update `tests/<lowerc
 - Suite name: `<kind> template`
 - Test cases:
   - `should not render when disabled` — assert `hitCount: 0`
-  - `should render with minimal config` — set `enabled=true` plus `hostnames=[example.com]` and `parentRefs=[{name: gw}]`; assert kind, apiVersion, hostnames[0], parentRefs[0].name, and **rules[0].name** (named rule)
+  - `should render with minimal config` — set `enabled=true` plus `hostnames=[example.com]` (where applicable) and `parentRefs=[{name: gw}]`; assert kind, apiVersion, hostnames[0] (if present), parentRefs[0].name, and **rules[0].name** (named rule)
   - `should propagate annotations` (HTTPRoute/GRPCRoute only)
   - `should support multiple parentRefs with namespace+sectionName`
   - `should default backendRef to service.fullname:service.port` (use the backend-port pattern chosen in Phase 6 — scalar or list index)
   - `should support filters` (HTTPRoute only — e.g. CORS)
   - `should support timeouts` (HTTPRoute only)
+  - **Negative cases** (test the `{{ fail }}` guards):
+    - `should fail when enabled without parentRefs` — set `enabled=true` but omit `parentRefs`; assert `failedTemplate` contains the parentRefs error message. Apply to every route kind.
+    - `should fail when HTTPRoute enabled without rules` — HTTPRoute-only; set `enabled=true`, valid `parentRefs`, and `rules=[]`; assert `failedTemplate` contains the MinItems=1 error message. Do not add this negative for GRPCRoute/TLSRoute/TCPRoute/UDPRoute — those kinds allow empty rules.
+
+These negatives catch regressions where a future edit silently removes a `{{ fail }}` guard and lets the chart generate an invalid manifest.
 
 ### update-mode adjustments
 
