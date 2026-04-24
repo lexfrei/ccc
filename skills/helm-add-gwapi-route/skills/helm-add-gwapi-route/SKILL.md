@@ -1,12 +1,28 @@
 ---
 name: helm-add-gwapi-route
-description: Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add-mode (chart has no *Route yet) vs update-mode (existing templates need modernization — outdated apiVersion, unnamed rules, CORS via annotations, HTTPS backend without BackendTLSPolicy). Pure file edits — no git, no PR. TRIGGER proactively when cwd is a Helm chart with templates/ingress.yaml but no *route.yaml, or when existing *Route templates use outdated apiVersion or lack named rules (best practice since v1.4, Nov 2025), or when the user mentions migrating from Ingress to Gateway API. Do not trigger for charts that already have current-spec routes or non-Helm projects.
+description: Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode, mirrors the chart's ingress/values conventions, applies current best practices (named rules, typed filters, optional BackendTLSPolicy). Pure file edits — no git, no PR. Trigger proactively on Helm charts with ingress but no routes, or outdated routes needing modernization. See "When to invoke" below for full triggers.
 argument-hint: "[chart-path] [--type=httproute|grpcroute|tlsroute|tcproute|udproute|auto] [--mode=add|update|auto] [--with-backend-tls]"
 ---
 
 # helm-add-gwapi-route
 
 Add or modernize Gateway API *Route resources inside a Helm chart. The skill only edits files — git operations (branch, commit, push, PR) are left to the caller.
+
+## When to invoke
+
+Invoke proactively (without an explicit user command) when any of these hold:
+
+- cwd is a Helm chart (Chart.yaml with `apiVersion: v2`) that has `templates/ingress.yaml` but no `templates/*route.yaml` — candidate for add-mode.
+- cwd has `templates/httproute.yaml` / `grpcroute.yaml` / `tlsroute.yaml` declaring `gateway.networking.k8s.io/v1beta1` or `v1alpha2` for resources that are now GA at `v1` — candidate for update-mode.
+- cwd has `*Route` templates whose rules lack the `name` field (named rules are best practice since Gateway API v1.4, November 2025).
+- The user mentions migrating a chart from Ingress to Gateway API, adding HTTPRoute/GRPCRoute/TLSRoute support, "gwapi", or modernizing existing routes.
+
+Do not invoke when:
+
+- The chart already has current-spec routes with nothing to modernize.
+- cwd is not a Helm chart (no `Chart.yaml` with `apiVersion: v2`).
+- The scope is a standalone Kubernetes manifest, not a Helm chart.
+- The user is working on an unrelated task — do not interrupt.
 
 ## Arguments
 
@@ -33,24 +49,36 @@ Parse `$ARGUMENTS`:
 
 ## Phase 2 — Verify current Gateway API spec
 
-Training data may be outdated. Before generating any template, fetch current maturity info via WebFetch from:
+Training data is frequently outdated on API maturity. Before generating any template, fetch fresh data via WebFetch — do not rely on memory or prior conversation.
 
-- https://gateway-api.sigs.k8s.io/concepts/versioning/
-- https://kubernetes.io/blog/ (search for the latest Gateway API release post)
+Fetch:
 
-Build a fresh status table. Typical expectations as of April 2026 (verify each time):
+- https://gateway-api.sigs.k8s.io/concepts/versioning/ — canonical maturity table.
+- https://kubernetes.io/blog/ — search for the latest Gateway API release post.
 
-| Resource | apiVersion | Status |
+Build a fresh status table covering every resource this skill generates: HTTPRoute, GRPCRoute, TLSRoute, TCPRoute, UDPRoute, BackendTLSPolicy, ReferenceGrant. Record the current apiVersion and channel (Standard / Experimental) for each.
+
+Carry that table into Phase 10 (Report). Every run must include a line like:
+
+```text
+Verified via WebFetch at <ISO8601 timestamp>: HTTPRoute=v1 (Standard), GRPCRoute=v1 (Standard), ...
+```
+
+This forces the model to actually perform the fetch rather than reuse cached claims.
+
+**Minimum cluster Gateway API version required per route kind** — this is a separate question from current apiVersion and changes much less often. As a reference (still verify via the versioning page in case of controller-specific caveats):
+
+| Route kind | Min Gateway API version | Since |
 |---|---|---|
-| HTTPRoute | gateway.networking.k8s.io/v1 | Standard (GA since v1.0) |
-| GRPCRoute | gateway.networking.k8s.io/v1 | Standard (GA since v1.4, Nov 2025) |
-| TLSRoute | gateway.networking.k8s.io/v1 | Standard (GA since v1.5, Mar 2026) |
-| TCPRoute | gateway.networking.k8s.io/v1alpha2 | Experimental |
-| UDPRoute | gateway.networking.k8s.io/v1alpha2 | Experimental |
-| BackendTLSPolicy | gateway.networking.k8s.io/v1 | Standard (GA since v1.4) |
-| ReferenceGrant | gateway.networking.k8s.io/v1beta1 | Standard (frozen in beta) |
+| HTTPRoute | v1.0 | Oct 2023 |
+| GRPCRoute | v1.1 | May 2024 |
+| BackendTLSPolicy | v1.4 | Nov 2025 |
+| Named rules on HTTPRoute/GRPCRoute | v1.4 | Nov 2025 |
+| CORS filter in Standard channel | v1.5 | Mar 2026 |
+| TLSRoute | v1.5 | Mar 2026 |
+| TCPRoute / UDPRoute | Experimental (no GA yet) | — |
 
-If a newer release promoted more resources, use the up-to-date apiVersion. Report the detected API status to the user in Phase 10.
+Surface the relevant minimum version(s) in Phase 10's PR body so users can gate on controller support.
 
 ## Phase 3 — Determine mode (add vs update)
 
@@ -142,13 +170,34 @@ gateway:
 
 `parentRefs` always defaults to `[]` — the cluster operator owns the Gateway resource; the chart should not assume its name.
 
+**TLSRoute / TCPRoute / UDPRoute parentRefs need `sectionName`.** These route kinds bind to a specific listener on the Gateway (by port and protocol), not to the Gateway as a whole. When generating a values example for any of these, include `sectionName` in the commented parentRefs example so users understand:
+
+```yaml
+  # parentRefs:
+  #   - name: my-gateway
+  #     namespace: gateway-system
+  #     sectionName: tls-passthrough   # must match a listener defined on the Gateway
+```
+
 ## Phase 6 — Generate or patch template file(s)
 
 ### add-mode — create a new template per selected route type
 
 All placeholders `<chart>` must be replaced with the real helper name captured in Phase 1.
 
-Use the apiVersion table from Phase 2.
+Use the apiVersion table built in Phase 2 — do not hardcode versions from this document.
+
+**Backend port resolution.** The default `backendRefs` entry points to the chart's own Service. Two common conventions in `values.yaml`:
+
+- Scalar: `.Values.service.port` — single main port.
+- List: `.Values.service.ports` — list of `{name, port, protocol}` objects (common in charts with multiple Service ports).
+
+In Phase 1 you captured which convention the chart uses. Emit the correct reference in the template:
+
+- For scalar: `port: {{ $.Values.service.port }}`
+- For list: `port: {{ (index $.Values.service.ports 0).port }}` (or a specific named port if the chart has multiple and only one matches the route's protocol — e.g. the port with `name: http` for HTTPRoute)
+
+If the chart uses a non-standard structure (e.g. `.Values.server.port`, `.Values.http.port`), substitute it into the template rather than forcing `.Values.service.port`.
 
 #### templates/httproute.yaml
 
@@ -246,7 +295,9 @@ Both use `apiVersion: gateway.networking.k8s.io/v1alpha2` (experimental — warn
 
 #### templates/backendtlspolicy.yaml (optional)
 
-Generate only when `--with-backend-tls` is set or a HTTPS-looking backend port is detected:
+Generate only when `--with-backend-tls` is set or a HTTPS-looking backend port is detected.
+
+**Note:** `caCertificateRefs` and `wellKnownCACertificates` are mutually exclusive per the BackendTLSPolicy spec. Use `if/else if` so only one renders even if both are set in values — the `else if` branch is only selected when `caCertificateRefs` is empty.
 
 ```yaml
 {{- if .Values.backendTLSPolicy.enabled -}}
@@ -262,11 +313,10 @@ spec:
       name: {{ include "<chart>.fullname" . }}
   validation:
     hostname: {{ .Values.backendTLSPolicy.hostname | quote }}
-    {{- with .Values.backendTLSPolicy.caCertificateRefs }}
+    {{- if .Values.backendTLSPolicy.caCertificateRefs }}
     caCertificateRefs:
-      {{- toYaml . | nindent 6 }}
-    {{- end }}
-    {{- if .Values.backendTLSPolicy.wellKnownCACertificates }}
+      {{- toYaml .Values.backendTLSPolicy.caCertificateRefs | nindent 6 }}
+    {{- else if .Values.backendTLSPolicy.wellKnownCACertificates }}
     wellKnownCACertificates: {{ .Values.backendTLSPolicy.wellKnownCACertificates | quote }}
     {{- end }}
 {{- end }}
@@ -280,7 +330,7 @@ Minimize the diff. Edit only the lines that correspond to discrepancies selected
 
 **add-mode:** insert the new values block (style chosen in Phase 5) after the `ingress:` block if it exists, otherwise after the `service:` block. Match the file's existing indent and comment style. If the file uses helm-docs `# --` annotations, add them to every new field.
 
-Include commented-out examples for common patterns so users can uncomment rather than look them up:
+Include commented-out examples for common patterns so users can uncomment rather than look them up. Annotate features with their minimum Gateway API version so users can gate on controller support:
 
 ```yaml
   # rules:
@@ -290,16 +340,42 @@ Include commented-out examples for common patterns so users can uncomment rather
   #           type: PathPrefix
   #           value: /api
   #     filters:
+  #       # CORS filter is Standard-channel since Gateway API v1.5 (Mar 2026).
+  #       # On older clusters it is Experimental and may not be supported.
   #       - type: CORS
   #         cors:
   #           allowOrigins: ["https://app.example.com"]
   #           allowMethods: [GET, POST]
+  #       - type: RequestHeaderModifier
+  #         requestHeaderModifier:
+  #           set:
+  #             - name: X-Forwarded-Prefix
+  #               value: /api
   #     timeouts:
+  #       # HTTPRoute timeouts are Standard-channel since Gateway API v1.2.
   #       request: 30s
   #       backendRequest: 10s
 ```
 
 **update-mode:** insert new fields (e.g. `filters: []` when CORS migration is selected, `name: default` on existing unnamed rules) with minimum surrounding changes.
+
+### NOTES.txt
+
+If the chart has `templates/NOTES.txt`, append a block describing how to inspect the newly added route(s) post-install. Example:
+
+```text
+{{- if .Values.httpRoute.enabled }}
+HTTPRoute '{{ include "<chart>.fullname" . }}' was created.
+Verify it is accepted by the parent Gateway:
+    kubectl --namespace {{ .Release.Namespace }} get httproute {{ include "<chart>.fullname" . }} --output yaml
+    kubectl --namespace {{ .Release.Namespace }} describe httproute {{ include "<chart>.fullname" . }}
+
+Check that the parentRefs resolve and the route is attached:
+    kubectl --namespace {{ .Release.Namespace }} get httproute {{ include "<chart>.fullname" . }} --output jsonpath='{.status.parents[*].conditions[?(@.type=="Accepted")].status}'
+{{- end }}
+```
+
+Adapt the kind name (HTTPRoute → GRPCRoute / TLSRoute / TCPRoute / UDPRoute) for each generated route type. If NOTES.txt does not exist and the chart has no other notes, skip this step — do not create a new NOTES.txt just for the route.
 
 ## Phase 8 — Optional helm-unittest test
 
@@ -311,20 +387,30 @@ Only if `tests/` exists in the chart (see Phase 1). Add or update `tests/<lowerc
   - `should render with minimal config` — set `enabled=true` plus `hostnames=[example.com]` and `parentRefs=[{name: gw}]`; assert kind, apiVersion, hostnames[0], parentRefs[0].name, and **rules[0].name** (named rule)
   - `should propagate annotations` (HTTPRoute/GRPCRoute only)
   - `should support multiple parentRefs with namespace+sectionName`
-  - `should default backendRef to service.fullname:service.port`
+  - `should default backendRef to service.fullname:service.port` (use the backend-port pattern chosen in Phase 6 — scalar or list index)
   - `should support filters` (HTTPRoute only — e.g. CORS)
   - `should support timeouts` (HTTPRoute only)
 
-In update-mode, update assertions to match the new structure (e.g. add `rules[0].name` assertion if named rules were introduced).
+### update-mode adjustments
+
+If `tests/<lowercase-kind>_test.yaml` already exists:
+
+1. Parse the existing file. Keep its `suite` name, `templates:` list, and `values:` fixture paths as-is.
+2. Preserve existing test case names and `set:` blocks. Only add new assertions (e.g. `rules[0].name` if named rules were added in Phase 6) — do not rewrite test bodies.
+3. Add brand-new test cases only for new behavior (e.g. new CORS filter test). Do not duplicate existing ones.
+4. If the existing file uses a values fixture (e.g. `set:` with a large object), do not inline it — keep the reference intact.
+5. Run `helm unittest <chart-path>` at the end of Phase 8 to confirm the whole suite still passes.
 
 ## Phase 9 — Verify rendering
 
 Run locally from the chart's directory:
 
 ```bash
-helm lint <chart-path>
+helm lint --strict <chart-path>
 helm template <chart-path>
 ```
+
+Use `--strict` — it surfaces deprecation warnings and unused values that plain `lint` misses.
 
 The default render should NOT include any *Route resource (all `enabled: false`).
 
@@ -344,6 +430,21 @@ helm template <chart-path> --set gateway.enabled=true \
   --set 'gateway.parentRefs[0].name=test' \
   --set 'gateway.httpRoute.hostnames[0]=test.example.com'
 ```
+
+### Server-side validation (optional but recommended)
+
+`helm template` + `helm lint` do not validate generated YAML against CRD schemas — they only catch Go template syntax errors. To catch schema violations (wrong field names, invalid enums, missing required fields) before the manifests are applied for real, run a server-side dry-run against a cluster that already has Gateway API CRDs installed:
+
+```bash
+helm template <chart-path> --set httpRoute.enabled=true \
+    --set 'httpRoute.parentRefs[0].name=test' \
+    --set 'httpRoute.hostnames[0]=test.example.com' \
+  | kubectl --context <ctx> apply --filename - --dry-run=server
+```
+
+Skip this step if the user has no cluster access in the current session.
+
+### helm-unittest
 
 If helm-unittest is installed and tests were added or updated:
 
