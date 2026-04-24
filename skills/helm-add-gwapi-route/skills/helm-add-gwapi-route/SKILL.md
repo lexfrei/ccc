@@ -257,7 +257,17 @@ spec:
 
 The outer `{{- with .Values.httpRoute.rules }}` serves two purposes: (a) it avoids emitting `rules: null` when the list is nil (which would fail schema type validation), and (b) combined with the top-level `{{ fail }}` guard above, it prevents rendering an HTTPRoute with an empty `rules:` list, which is invalid because `HTTPRouteSpec.rules` has `MinItems=1` in the v1 CRD (confirmed in `apis/v1/httproute_types.go`).
 
-Apply the `{{- with }}` guard around `rules:` to every route template. For HTTPRoute, also apply the empty-rules `{{ fail }}` guard above — this is HTTPRoute-specific because its spec mandates MinItems=1. GRPCRoute, TLSRoute, TCPRoute, and UDPRoute do not have that MinItems constraint (verified in their respective Go types), so for those kinds the `{{- with }}` guard alone is sufficient and no `{{ fail }}` is needed for empty rules.
+Apply the `{{- with }}` guard around `rules:` to every route template. The `{{ fail }}` on empty rules is per-kind because the MinItems constraint is per-kind (verified directly in the Go types):
+
+| Kind | `rules` required? | `MinItems` | `MaxItems` |
+| --- | --- | --- | --- |
+| HTTPRoute (`apis/v1`) | yes | 1 | 16 |
+| GRPCRoute (`apis/v1`) | no | — | 16 |
+| TLSRoute (`apis/v1`) | **yes** | **1** | **1** |
+| TCPRoute (`apis/v1alpha2`) | yes | 1 | 16 |
+| UDPRoute (`apis/v1alpha2`) | yes | 1 | 16 |
+
+So: add the empty-rules `{{ fail }}` guard to HTTPRoute, **TLSRoute, TCPRoute, UDPRoute** templates. Only GRPCRoute may have empty rules (match-all semantics). In addition, TLSRoute has `MaxItems=1` on rules — the template must `{{ fail }}` when `len .Values.tlsRoute.rules` > 1.
 
 Matches is wrapped in `{{- with .matches }}` because HTTPRoute (and GRPCRoute) treat a missing `matches` field as "match all" — valid and sometimes intended. Rendering `matches: null` from `toYaml nil` would be rejected by CRD validators. The same `{{- with }}` guard applies to the GRPCRoute template.
 
@@ -273,14 +283,20 @@ Structurally identical to HTTPRoute. Differences:
 
 #### templates/tlsroute.yaml
 
-No `filters`. `hostnames` are SNI names and are **optional** per the TLSRoute spec (`apis/v1alpha2/tlsroute_types.go` marks them `+optional` with only `MaxItems=16`, no `MinItems`). A TLSRoute with no hostnames matches all SNIs allowed by the parent listener. Do not treat `hostnames` as required or add a `{{ fail }}` guard for it.
+No `filters`. `hostnames` are SNI names. Per `apis/v1/tlsroute_types.go`, hostnames are `+optional` in the struct (the entire field may be omitted, which yields match-all-allowed-by-listener semantics), but if populated, the list has `MinItems=1`. The `{{- with }}` guard correctly skips the entire block when the value is nil/empty, so no extra `{{ fail }}` on hostnames is needed.
 
-Rules contain only `backendRefs`:
+Rules, however, are `+required` with `MinItems=1` **and** `MaxItems=1` — exactly one rule. The template must `{{ fail }}` on both empty and multi-rule inputs.
 
 ```yaml
 {{- if .Values.tlsRoute.enabled -}}
 {{- if not .Values.tlsRoute.parentRefs -}}
 {{- fail "tlsRoute.enabled=true but tlsRoute.parentRefs is empty. Set tlsRoute.parentRefs (including sectionName for the tls-passthrough listener) to the Gateway(s) managed by your cluster operator." -}}
+{{- end -}}
+{{- if not .Values.tlsRoute.rules -}}
+{{- fail "tlsRoute.enabled=true but tlsRoute.rules is empty. TLSRouteSpec.rules has MinItems=1 in the v1 CRD (apis/v1/tlsroute_types.go) — an enabled TLSRoute without rules is rejected by kube-apiserver." -}}
+{{- end -}}
+{{- if gt (len .Values.tlsRoute.rules) 1 -}}
+{{- fail "tlsRoute.rules has more than one entry. TLSRouteSpec.rules has MaxItems=1 in the v1 CRD — exactly one rule is allowed per TLSRoute." -}}
 {{- end -}}
 apiVersion: gateway.networking.k8s.io/v1
 kind: TLSRoute
@@ -296,9 +312,8 @@ spec:
   hostnames:
     {{- toYaml . | nindent 4 }}
   {{- end }}
-  {{- with .Values.tlsRoute.rules }}
   rules:
-    {{- range . }}
+    {{- range .Values.tlsRoute.rules }}
     -
       {{- with .name }}
       name: {{ . | quote }}
@@ -311,13 +326,53 @@ spec:
           port: {{ $.Values.service.port }}
         {{- end }}
     {{- end }}
-  {{- end }}
 {{- end }}
 ```
 
+The top-level guards ensure `len .Values.tlsRoute.rules == 1` by the time the body runs, so the inner `range` is guaranteed to produce exactly one rule and the `{{- with .Values.tlsRoute.rules }}` wrapper used in HTTPRoute is not needed here.
+
 #### templates/tcproute.yaml and templates/udproute.yaml
 
-Both use `apiVersion: gateway.networking.k8s.io/v1alpha2` (experimental — warn user). No `hostnames`, no `filters`. `parentRefs` should include `sectionName` to bind to a specific listener port on the Gateway. Structure mirrors TLSRoute minus hostnames.
+Both use `apiVersion: gateway.networking.k8s.io/v1alpha2` (experimental — warn user). No `hostnames`, no `filters`. `parentRefs` should include `sectionName` to bind to a specific listener port on the Gateway.
+
+Per `apis/v1alpha2/tcproute_types.go` and `apis/v1alpha2/udproute_types.go`, `rules` is `+required` with `MinItems=1` (no explicit upper bound, effectively MaxItems=16 like other routes). Include both guards:
+
+```yaml
+{{- if .Values.tcpRoute.enabled -}}
+{{- if not .Values.tcpRoute.parentRefs -}}
+{{- fail "tcpRoute.enabled=true but tcpRoute.parentRefs is empty. Set tcpRoute.parentRefs (with sectionName) to the Gateway(s) managed by your cluster operator." -}}
+{{- end -}}
+{{- if not .Values.tcpRoute.rules -}}
+{{- fail "tcpRoute.enabled=true but tcpRoute.rules is empty. TCPRouteSpec.rules has MinItems=1 in the v1alpha2 CRD." -}}
+{{- end -}}
+apiVersion: gateway.networking.k8s.io/v1alpha2
+kind: TCPRoute
+metadata:
+  name: {{ include "<chart>.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "<chart>.labels" . | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.tcpRoute.parentRefs | nindent 4 }}
+  rules:
+    {{- range .Values.tcpRoute.rules }}
+    -
+      {{- with .name }}
+      name: {{ . | quote }}
+      {{- end }}
+      backendRefs:
+        {{- if .backendRefs }}
+        {{- toYaml .backendRefs | nindent 8 }}
+        {{- else }}
+        - name: {{ include "<chart>.fullname" $ }}
+          port: {{ $.Values.service.port }}
+        {{- end }}
+    {{- end }}
+{{- end }}
+```
+
+UDPRoute is identical — replace `tcpRoute` with `udpRoute`, `TCPRoute` with `UDPRoute`, and update the fail messages accordingly.
 
 #### templates/backendtlspolicy.yaml (optional)
 
@@ -443,9 +498,12 @@ Only if `tests/` exists in the chart (see Phase 1). Add or update `tests/<lowerc
   - `should default backendRef to service.fullname:service.port` (use the backend-port pattern chosen in Phase 6 — scalar or list index)
   - `should support filters` (HTTPRoute only — e.g. CORS)
   - `should support timeouts` (HTTPRoute only)
-  - **Negative cases** (test the `{{ fail }}` guards):
+  - **Negative cases** (test the `{{ fail }}` guards — one case per guard):
     - `should fail when enabled without parentRefs` — set `enabled=true` but omit `parentRefs`; assert `failedTemplate` contains the parentRefs error message. Apply to every route kind.
-    - `should fail when HTTPRoute enabled without rules` — HTTPRoute-only; set `enabled=true`, valid `parentRefs`, and `rules=[]`; assert `failedTemplate` contains the MinItems=1 error message. Do not add this negative for GRPCRoute/TLSRoute/TCPRoute/UDPRoute — those kinds allow empty rules.
+    - `should fail when enabled without rules` — set `enabled=true`, valid `parentRefs`, and `rules=[]`; assert `failedTemplate` contains the MinItems=1 error message. Apply to **HTTPRoute, TLSRoute, TCPRoute, UDPRoute**. Do **not** add this for GRPCRoute — its spec allows empty rules (match-all).
+    - `should fail when TLSRoute has more than one rule` — TLSRoute-only; set two rule entries; assert `failedTemplate` contains the MaxItems=1 error message.
+
+  - **TLSRoute minimal-config test** should include valid single-rule `rules=[{name: default, backendRefs: [...]}]` (because rules is MinItems=1 for TLSRoute; the generic minimal-config case earlier in the list must be instantiated with rules populated for TLSRoute/TCPRoute/UDPRoute).
 
 These negatives catch regressions where a future edit silently removes a `{{ fail }}` guard and lets the chart generate an invalid manifest.
 
