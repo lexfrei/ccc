@@ -1,6 +1,6 @@
 ---
 name: address-pr-comments
-description: End-to-end closeout of unresolved review comments across one or more GitHub PRs. For each PR checks out the branch, fetches unresolved threads, verifies against current code, fixes legitimate findings (one signed-off commit + push per thread), asks approval on reply drafts, posts replies, then moves to the next PR. Returns to the original branch at the end.
+description: End-to-end closeout of unresolved review feedback across one or more GitHub PRs. For each PR checks out the branch, fetches every source of blocking feedback (inline threads, CHANGES_REQUESTED review-submission bodies, issue comments, plus reviewDecision), verifies against current code, fixes legitimate findings (one signed-off commit + push per finding), asks approval on reply drafts, posts replies (inline reply for threads, top-level @mention for review bodies), then moves to the next PR. Returns to the original branch at the end.
 argument-hint: "[PR number or owner/repo#N] [more PRs...]"
 ---
 
@@ -55,21 +55,30 @@ Scan the repo for agent-facing contribution rules and follow them exactly. Commo
 
 Project rules OVERRIDE this skill's defaults — e.g. commit message format, reply etiquette, threads to ignore, whether a separate commit per thread is required.
 
-## Step 4: Fetch unresolved review threads
+## Step 4: Fetch every source of actionable feedback
 
-Use GraphQL — REST does not expose `isResolved`. Capture `threadId` (needed for replies) and the diff position fields.
+Three GitHub objects can carry blocking feedback on a PR. The skill must read all three:
+
+1. **Inline review threads** (`reviewThreads`) — comments attached to a file/line, repliable via `addPullRequestReviewThreadReply`.
+2. **Review submission bodies** (`reviews[].body`) — the freeform text a reviewer types when they click *Approve / Request changes / Comment*. They have **no** `threadId` and are **not** part of `reviewThreads`. A `CHANGES_REQUESTED` review with only a body and zero inline comments is the most-common cause of a PR being blocked without any thread to reply to. Missing this source = silently ignoring the reviewer.
+3. **Issue comments** — the general PR conversation (bot summaries, follow-ups).
+
+Also pull `reviewDecision` so the skill knows when the PR is blocked but no findings remain after filtering — that almost always means a finding was missed.
 
 ```bash
 gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr=$PR_NUMBER -f query='
 query($owner: String!, $repo: String!, $pr: Int!) {
   repository(owner: $owner, name: $repo) {
     pullRequest(number: $pr) {
+      reviewDecision
       reviewThreads(first: 100) {
+        pageInfo { hasNextPage endCursor }
         nodes {
           id
           isResolved
           isOutdated
           comments(first: 100) {
+            pageInfo { hasNextPage }
             nodes {
               id
               path
@@ -83,30 +92,55 @@ query($owner: String!, $repo: String!, $pr: Int!) {
           }
         }
       }
+      reviews(first: 100, states: [CHANGES_REQUESTED, COMMENTED]) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          state
+          body
+          author { login }
+          submittedAt
+          url
+          commit { oid }
+          comments(first: 1) { totalCount }
+        }
+      }
     }
   }
-}' --jq '.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)'
+}'
 ```
 
-Also fetch top-level issue comments for bot summaries:
+Filter:
+
+- **Threads** — keep where `isResolved == false`.
+- **Review submissions** — keep where `state == "CHANGES_REQUESTED"` (always, even with empty body — surface as ASK so the user explains the block). For `state == "COMMENTED"`, keep only if `body != ""` AND `comments.totalCount == 0` (a COMMENTED review with inline comments is already covered by the threads query; its body is usually a meta-summary).
+- **Issue comments** (separate REST call):
 
 ```bash
 gh api "repos/$OWNER/$REPO/issues/$PR_NUMBER/comments" --jq '.[] | {id, author: .user.login, body, url}'
 ```
 
-For each unresolved thread, record: `threadId`, `path`, `line` (or `originalLine` when `line` is null), `author.login`, `bodyText`, `url`, and `isOutdated`.
+If `reviewDecision == "CHANGES_REQUESTED"` but no surviving threads or review-submission bodies remain after filtering, **stop and ask the user** — the PR is blocked but the skill found nothing actionable. Most likely a thread was missed (pagination, an unusual state, dismissed review) and proceeding would close out the PR while ignoring the actual blocker.
 
-**Pagination guard**: if the query returns exactly 100 review threads or any thread has exactly 100 comments, the data was truncated. Either paginate via `pageInfo.hasNextPage`/`endCursor` or warn the user and ask whether to proceed on partial data.
+Treat each surviving thread AND each surviving review-submission body as a separate **finding**. For each finding, record:
 
-## Step 5: Verify each thread against CURRENT code
+- common: `kind` (`"thread"` or `"review_body"`), `author.login`, body text, `url`, timestamp.
+- thread-only: `threadId`, `path`, `line` (or `originalLine` when `line` is null), `isOutdated`.
+- review-body-only: `reviewId`, `state`, `commit.oid` (the commit the review was filed against — useful for diffing what changed since).
+
+**Pagination guard**: if any of the three queries returns exactly 100 nodes, or any thread has exactly 100 comments, the data was truncated. Either paginate via `pageInfo.hasNextPage`/`endCursor` or warn the user and ask whether to proceed on partial data.
+
+## Step 5: Verify each finding against CURRENT code
 
 **MANDATORY — do not skip.** Reviewer bots hallucinate. Code often evolved after a comment was posted. Blindly applying suggestions or replying "fixed" without checking damages trust.
 
-For each thread:
+For each finding:
 
-1. Read the file at the referenced path and line in the current working tree. If `line` is null (outdated), use `originalLine` as a starting point and locate the relevant code by context.
+1. Locate the relevant code:
+   - **Thread findings** — read the file at the referenced path and line in the current working tree. If `line` is null (outdated), use `originalLine` as a starting point and locate the code by context.
+   - **Review-body findings** — the comment is freeform and not anchored to a file. Parse the body, identify the file or area it refers to, and read it. If the scope is ambiguous (no clear file, no clear claim), classify as ASK and consult the user before guessing.
 2. Trace the claim — find the code path that proves or disproves the concern.
-3. Check whether the issue is already fixed by a later commit on the branch.
+3. Check whether the issue is already fixed by a later commit on the branch (for review-body findings, diff against the recorded `commit.oid` to see what changed since the review was filed).
 4. Check project conventions (agent docs, CONTRIBUTING.md, existing patterns). A suggestion that violates project style should NOT be applied.
 
 Assign one verdict per thread:
@@ -117,9 +151,9 @@ Assign one verdict per thread:
 - **DEFER** — valid point but out of scope for this PR. The reply acknowledges and links to a follow-up if one exists.
 - **ASK** — verdict is non-obvious: the suggestion is a judgment call, reasonable people disagree, the trade-off isn't clear-cut, or the fix would touch something sensitive (public API, migrations, performance-critical path, stylistic preference without project precedent). Do NOT pick FIX/WONTFIX unilaterally in these cases.
 
-For every **ASK** thread: pause before Step 6 and ask the user via `AskUserQuestion` — present the thread (author + quote), your evidence, and the candidate verdicts. Let the user decide. Proceed only after the user's answer.
+For every **ASK** finding: pause before Step 6 and ask the user via `AskUserQuestion` — present the finding (author + quote + kind), your evidence, and the candidate verdicts. Let the user decide. Proceed only after the user's answer.
 
-Keep an internal table of `(threadId, verdict, evidence)` — the user will see it during the approval step.
+Keep an internal table of `(findingId, kind, verdict, evidence)` where `findingId` is `threadId` for thread findings or `reviewId` for review-body findings — the user will see it during the approval step.
 
 ## Step 6: Apply fix + commit + push, PER THREAD
 
@@ -173,9 +207,11 @@ Ask explicitly: "Post all replies for PR #N?". Wait for confirmation. If the use
 
 Commits have already been pushed by this point — the approval gate is specifically for the public reply text.
 
-## Step 9: Post replies via GraphQL
+## Step 9: Post replies
 
-Use `addPullRequestReviewThreadReply` — it keeps each reply attached to the correct thread. Write each reply body to a temp file first to avoid shell-escaping issues:
+Branch on the finding kind. Write each reply body to a temp file first to avoid shell-escaping issues.
+
+**Thread findings** — reply attached to the correct thread via `addPullRequestReviewThreadReply`:
 
 ```bash
 cat > /tmp/reply.txt << 'EOF'
@@ -192,6 +228,17 @@ mutation($threadId: ID!, $body: String!) {
   }
 }' --jq '.data.addPullRequestReviewThreadReply.comment.url'
 
+rm -f /tmp/reply.txt
+```
+
+**Review-body findings** — there is no `threadId` to reply on. Post a top-level PR comment that opens with an `@<reviewer>` mention so the reviewer is notified:
+
+```bash
+cat > /tmp/reply.txt << 'EOF'
+@<reviewer> <reply body referencing the addressing commit SHA(s)>
+EOF
+
+gh pr comment "$PR_NUMBER" --repo "$OWNER/$REPO" --body-file /tmp/reply.txt
 rm -f /tmp/reply.txt
 ```
 
@@ -226,7 +273,8 @@ Do not resolve threads automatically. The reviewer (human or bot) decides whethe
 
 ## Hard rules
 
-- **Commits are mandatory for FIX threads** — one commit per thread, signed off, signed with GPG where configured, project-conventional message, pushed to the PR branch. No uncommitted leftovers.
+- **Cover all three sources of feedback.** Inline threads alone are not enough — a `CHANGES_REQUESTED` review with only a freeform body and no inline comments is still a blocker. Step 4 reads inline threads, review-submission bodies, AND issue comments, and verifies `reviewDecision`. Skipping any source means silently ignoring the reviewer.
+- **Commits are mandatory for FIX findings** — one commit per finding, signed off, signed with GPG where configured, project-conventional message, pushed to the PR branch. No uncommitted leftovers.
 - **Never bypass signing.** If GPG signing is configured, respect it. Do not pass `--no-gpg-sign` or disable `commit.gpgsign`. If signing prompts for a PIN, WAIT — do not work around it.
 - **Approval gate before public replies.** Commits are auto-pushed, but reply comments REQUIRE user approval before posting.
 - **Language**: replies are ALWAYS English. Chat with the user is in whatever language the user uses.
