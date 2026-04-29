@@ -1,7 +1,7 @@
 {
   "name": "review-toolkit",
-  "version": "1.1.0",
-  "description": "Comprehensive code review pipeline: branch review, PR final review with sequential dual-model analysis (Codex then Claude), and GitHub PR review publishing with evidence-based verification",
+  "version": "1.2.0",
+  "description": "Comprehensive PR review pipeline: branch-level analysis, sequential Claude+Codex dual-model review with evidence-based verification, and GitHub PR review publishing under a five-frame substance framework. Reviews land on an APPROVE or REQUEST_CHANGES verdict — never observation-only.",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"

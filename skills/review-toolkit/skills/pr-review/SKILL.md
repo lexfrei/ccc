@@ -1,7 +1,8 @@
 ---
 name: pr-review
-description: Post a GitHub PR review with inline comments. Runs dual analysis (/branch-review + /final-review in parallel), cross-validates every finding against actual code/docs/running systems, presents draft to user for approval, then publishes via GitHub API. Designed to catch AI hallucinations — every claim must have evidence.
-argument-hint: "[PR number] [--approve] [--target branch]"
+description: Post a GitHub PR review with inline comments. Runs the five-frame substance pass (problem real / approach optimal / tradeoffs / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, presents draft for approval, then publishes via GitHub API. Reviews land on APPROVE or REQUEST_CHANGES — never observation-only.
+  TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples: "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for: replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
+argument-hint: "[PR number] [--approve] [--target branch] [--ticket URL|ID]"
 ---
 
 **CRITICAL**: This skill produces a PUBLISHED GitHub review visible to the PR author and all watchers. Every word matters. Every claim must be proven. User MUST approve the text before publishing.
@@ -11,8 +12,9 @@ argument-hint: "[PR number] [--approve] [--target branch]"
 Parse $ARGUMENTS for:
 
 - PR number (positional, optional). If omitted, detect from current branch: `gh pr view --json number --jq .number 2>/dev/null`
-- `--approve` — submit as APPROVE instead of REQUEST_CHANGES (only if no blockers found)
-- `--target` — target branch override (passed through to sub-reviews)
+- `--approve` — submit as APPROVE explicitly even when no blockers found (default behavior is APPROVE without blockers, so this flag is informational)
+- `--target` — target branch override (passed through to `/branch-review`)
+- `--ticket` — external ticket reference (URL or ID) for cross-referencing requirements beyond the PR description; activates the Ticket Compliance section in the output
 
 If no PR number and no PR exists for current branch, report error and stop.
 
@@ -20,7 +22,7 @@ If no PR number and no PR exists for current branch, report error and stop.
 
 Before any analysis, fetch ALL remote refs and verify the PR scope via GitHub API.
 
-**CRITICAL**: Local branches go stale. NEVER use bare `main` or `<base-branch>` in git diff — ALWAYS use `origin/<branch>`. A stale local branch produces phantom diffs that include already-merged commits, leading to false findings (e.g., claiming a PR needs rebasing when it doesn't).
+**CRITICAL**: Local branches go stale. NEVER use bare `main`/`master`/base-branch in `git diff` — ALWAYS use `origin/<branch>`. A stale local branch produces phantom diffs that include already-merged commits, leading to false findings (e.g., claiming a PR needs rebasing when it doesn't).
 
 ```bash
 # Fetch everything so origin/* refs are current
@@ -51,184 +53,302 @@ gh pr view $PR_NUMBER --json comments --jq '.comments[] | select(.author.is_bot 
 gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user.login | test("bot|coderabbit|gemini"; "i")) | {author: .user.login, path: .path, line: (.original_line // .line), body: .body}'
 ```
 
-Note which bot findings are valid and which are noise. Check if the author has responded to bot comments. In the final review, remind the author to address unanswered bot comments if any are valid.
+Note which bot findings are valid and which are noise. Check if the author has responded to bot comments. If valid bot findings remain unaddressed, either incorporate them into the review (with new evidence — never repeat verbatim) or surface a general note asking the author to address them.
 
-## Step 2: Parallel Analysis
+## Step 2: Business Context
 
-Launch BOTH skills simultaneously using the Agent tool:
+Before any code reading, frame WHY this PR exists. Read in this order:
 
-1. `/branch-review --target <target>` — branch-level analysis with full codebase context
-2. `/final-review $PR_NUMBER` — PR-focused review with business context and dual-model (Claude + Codex)
+1. PR title and full body
+2. Linked issues (`closingIssuesReferences` in `gh pr view`) and their acceptance criteria
+3. Existing reviews and their findings (do not repeat already-raised points)
+4. If `--ticket` provided, fetch ticket content:
+   - URL starting with `http`: `gh issue view <number> --repo <owner/repo>` for GitHub URLs, `WebFetch` for external URLs (Jira, Linear, Notion)
+   - GitHub shorthand (`#123`): `gh issue view 123` in the current repo
+   - Other ID: ask the user for the full URL
 
-Wait for both to complete. Collect all findings from both.
+Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary will appear in the published review under `**Business context**:`.
 
-## Step 3: Deduplicate and Merge Findings
+If `--ticket` was provided, also extract:
 
-Build a unified list of all unique findings from both analyses. For each finding, record:
+- Title and description
+- Acceptance criteria (specific requirements, if listed)
+- Scope (what is in scope, what is explicitly out of scope)
 
-- **Source**: which analysis found it (review-branch, final-review/Claude, final-review/Codex, or multiple)
-- **Claim**: what the finding asserts
-- **Severity**: blocker vs observation vs suggestion
-- **File and line**: exact location in the diff
+## Step 3: Five-Frame Substance Pass
 
-Deduplicate findings that describe the same issue from different angles — keep the most precise description.
+Sequentially answer the five questions, taking notes. The output of this step is a list of preliminary concerns to verify in Step 5. Substance findings are NOT to be confused with code-quality findings — Frame 5 delegates the latter to Step 4.
 
-## Step 4: Verify Every Finding (MANDATORY)
+**Frame 1 — Is the stated problem real and well-scoped?** Verify the symptom against current code/docs/running behavior, not just the PR description. If the description says "X causes Y" trace it: does X actually cause Y in the current codebase? If you cannot reproduce the claim from reading the code, that is a finding.
 
-**CRITICAL**: AI models hallucinate. Blind trust in AI findings destroys reviewer credibility. Every claim must be proven with evidence before inclusion.
+**Frame 2 — Is the chosen approach optimal among realistic alternatives?** Actively enumerate at least 2-3 other approaches that could solve the same problem (different abstraction layer, different tool, stateless vs stateful, different default, different repo location). Explain why each was rejected or accepted in this context. If you cannot list alternatives, the substance work is not done.
 
-For EACH finding, perform mandatory verification:
+**Frame 3 — Are the design tradeoffs acknowledged?** Storage cost, performance, security, operational burden, lock-in, default-vs-recommended mismatch, migration cost. The PR (description, README, comments) should name the tradeoffs it accepts. If it doesn't, raise them.
 
-### 4a. Code verification
+**Frame 4 — Is the documentation in sync?** Look for a sibling docs PR (typical pattern: code in this repo + docs in a `*-website` repo, linked from the PR body or with a matching slug). Verify it exists, is OPEN, and matches what the code ships now (flag names, defaults, prerequisites, examples). Also check in-repo docs (`README.md`, `docs/`, package READMEs).
 
-- Read the actual source files (not just the diff) to confirm the claimed behavior
-- Trace execution paths to prove the problem manifests
-- Check for existing mitigations, guards, or design decisions that address the concern
-- Check upstream documentation for libraries/tools mentioned in the finding
+When the docs search returns empty, that is ambiguous — it can mean either (a) the change is plumbing/internal and legitimately needs no docs, or (b) the change is user-facing but the docs gap predates this PR. To resolve, open the relevant existing user-facing doc page and read it as a user would. Ask: does the documented workflow rely on the behavior this PR changes? Does it currently misrepresent reality (if a bug was latent)? Does it omit a now-relevant capability?
 
-### 4b. Cross-reference verification
+For pre-existing cross-repo docs gaps, prepare a tracking-issue draft (title + body) now; it will be filed in Step 9 after user approval, and its URL spliced into the review under non-blocking follow-ups. Do not block the PR on a pre-existing cross-repo gap. For pre-existing in-repo docs that describe the area being changed, the cascaded `/branch-review` (Step 4a) treats them as blockers per its own rules — do not duplicate that logic here.
 
-- If a finding claims "X doesn't work with Y" — search for evidence: upstream docs, compatibility matrices, changelogs, GitHub issues
-- If a finding claims "this will crash/fail" — find the specific code path or documented behavior that proves it
-- If a finding is about configuration — search upstream docs and examples for the correct usage pattern. Do NOT attempt to connect to live clusters or infrastructure to verify
+**Frame 5 — Is the code quality solid?** This frame is satisfied by the dual analysis in Step 4 (cascaded `/branch-review` + Codex + Claude). Note here whether any business-context concerns from Frames 1-3 need explicit cross-validation by the models, and forward those as hints into the dual analysis.
 
-### 4c. Verdict per finding
+## Step 4: Dual Analysis
 
-After verification, each finding gets one of:
+Run two analyses in sequence, then merge.
 
-- **CONFIRMED**: Evidence supports the claim. Include the evidence summary.
-- **DISPROVEN**: Evidence contradicts the claim. Drop the finding entirely. Note in internal log why it was dropped.
-- **UNVERIFIABLE**: Cannot confirm or deny with available information. Downgrade to observation/question, not a blocker.
+### 4a. Cascade `/branch-review`
 
-**Only CONFIRMED findings proceed to the review.**
+Invoke the `/branch-review` skill with `--target $PR_BASE` (and `--ticket <ticket>` if provided). It owns its own rules — LGTM/NOT LGTM verdict, "pre-existing in the neighborhood = own it", comments-as-fixes are blockers, tests-for-every-issue, doc accuracy. Do NOT duplicate those rules here. Capture its verdict and findings.
 
-## Step 5: Classify Confirmed Findings
+If `/branch-review` is invoked from a directory whose active branch is not the PR branch, it creates a temporary worktree internally — see its SKILL.md for the worktree workflow.
 
-Each confirmed finding becomes one of:
+### 4b. Codex review (synchronous, blocking)
 
-### Blocker (REQUEST_CHANGES)
+Check that the `codex` CLI is available:
 
-Will cause real problems if merged:
+```bash
+command -v codex && codex --version
+```
 
-- Runtime failures (crashes, CrashLoopBackOff, silent misconfiguration)
+If available, run `codex review` against the PR's base branch **synchronously** (NOT in background). Use a 10-minute timeout. The `--base` flag and `[PROMPT]` argument are **mutually exclusive** — pass only `--base`:
+
+```bash
+codex review --base $PR_BASE --config 'sandbox_mode="danger-full-access"'
+```
+
+The sandbox is fully disabled so Codex can run build tools, tests, and access the network without restrictions.
+
+**CRITICAL**: Do NOT use `run_in_background`. The Bash call MUST block until Codex completes. Save the full Codex output before proceeding.
+
+If `codex` is not installed: warn the user (`codex CLI not found — running Claude-only review. Install it to enable dual-model verification.`) and continue.
+
+If `codex review` fails: warn and continue with Claude-only.
+
+### 4c. Claude's own analysis
+
+After 4a and 4b complete, perform Claude's independent analysis of `gh pr diff $PR_NUMBER`. Build an exclude list based on detected project type:
+
+- Lock files (`go.sum`, `package-lock.json`, `yarn.lock`, `Cargo.lock`, `poetry.lock`)
+- Vendored dependencies (`vendor/`, `node_modules/`, `third_party/`)
+- Generated code (`*.generated.*`, `*_generated.*`, `zz_generated.*`, `*.pb.go`)
+
+For each changed file, when the diff alone is insufficient: read the full file for surrounding context, read tests/configs/related files, use web search for unfamiliar libraries or APIs.
+
+Examine for:
+
+- **Race conditions**: concurrent access to shared state, missing synchronization, goroutine leaks
+- **Edge cases**: nil/null handling, empty collections, boundary values, integer overflow, unicode
+- **Error handling**: swallowed errors, missing cleanup in error paths, panic/throw in library code, error wrapping losing context
+- **Resource leaks**: unclosed files/connections/channels, missing defer/finally, context cancellation not propagated
+- **Naming and abstractions**: misleading names, wrong abstraction level, leaky abstractions, god functions
+- **API contracts**: breaking changes to public interfaces, missing input validation, undocumented behavior changes
+- **Security**: injection (SQL, command, template), auth bypass, secrets in code, unsafe deserialization, path traversal
+- **Data integrity**: missing transactions, partial writes, inconsistent state on failure, TOCTOU races
+- **Documentation drift**: behavior changes not reflected in existing docs
+
+Cross-reference business context from Step 2 — concerns flagged in Frames 1-3 should get a focused look here.
+
+Produce a RAW list of potential findings — do NOT verify them yet. Verification happens in Step 5.
+
+## Step 5: Verify Every Finding
+
+**CRITICAL**: AI models hallucinate. Blind trust destroys reviewer credibility. Every claim must be proven with evidence before inclusion.
+
+Merge the raw finding lists from `/branch-review`, Codex, and Claude. Then verify EVERY finding.
+
+### 5a. Verification
+
+For each finding:
+
+1. **Locate the evidence**: read the actual source code, not just the diff. Identify the specific lines that demonstrate the problem.
+2. **Trace the execution path**: follow the code flow to prove the problem actually manifests. If a "missing error check" is actually handled upstream, it is not a finding.
+3. **Check for mitigations**: search the codebase for existing guards, fallbacks, or design decisions that intentionally address the concern. Read related files, configs, dependencies.
+4. **Prove, don't speculate**: each finding must include concrete evidence — file paths, line numbers, code snippets, or external documentation references.
+5. **Disprove if wrong**: if investigation shows a finding is invalid, log it as DISPROVEN with the reason — these will be shown to the user in Step 8 so the dismissal can be cross-checked.
+
+### 5b. Per-finding verdict
+
+Each finding gets exactly one of:
+
+- **CONFIRMED**: evidence supports the claim. Include an `**Evidence**:` line summarizing what was checked, what was found, and why it proves the issue.
+- **DISPROVEN**: evidence contradicts the claim. Drop the finding from the review; log it internally for Step 8.
+- **UNVERIFIABLE**: cannot confirm or deny with available information. Downgrade to a question/observation, never a blocker.
+
+Only CONFIRMED findings proceed to the review.
+
+### 5c. Cross-model merge rules
+
+After verification, label findings by source:
+
+- Both models found the issue AND verification confirmed it → high confidence, tag `[Claude + Codex]`
+- Only Codex found it AND Claude verified → tag `[Codex]`
+- Only Codex found it AND Claude could not verify → EXCLUDE from the review; note in the Summary that it was investigated and dismissed
+- Only Claude found it AND verification confirmed → include normally (no tag)
+- Models contradict each other → investigate deeper; present the evidence-backed conclusion
+
+### 5d. Evidence format
+
+Each finding in the published review must carry an `**Evidence**:` line. Example:
+
+> cert-manager `values.yaml:3` sets `enableGatewayAPI: true` unconditionally. **Evidence**: cert-manager source (link) shows the gateway-shim controller discovers CRDs only at startup; `cozystack.cert-manager` PackageSource has no `dependsOn` for `cozystack.gateway-api-crds`; therefore on fresh install cert-manager starts before CRDs exist → gateway support silently non-functional.
+
+Counter-example (rejected as speculation):
+
+> "enableGatewayAPI is set but Gateway API CRDs might not be installed yet" — no evidence of startup behavior, no dependency check.
+
+## Step 6: Classify Confirmed Findings
+
+Two categories. If a finding fits neither, drop it.
+
+### Blockers (REQUEST_CHANGES)
+
+The PR MUST NOT merge with any of these present:
+
+- Bugs that will manifest in production
 - Security vulnerabilities
-- Data loss or corruption
-- Breaking changes to existing functionality
-- Broken variants/environments (e.g., works in variant A but breaks variant B)
+- Data loss or corruption risks
+- Broken API contracts (existing consumers will break)
+- Broken variants/environments (works in variant A but breaks variant B)
+- Missing error handling that causes silent failures
+- Resource leaks under normal operation (not just edge cases)
+- Behavior changes with stale documentation in the area being changed
+- Missing `--ticket` requirements when `--ticket` was provided
+- Findings the cascaded `/branch-review` raised as blockers (LGTM bar, comments-as-fixes, in-repo doc accuracy, etc.)
 
-### Observation (non-blocking)
+### Action items (non-blocking)
 
-Real issues worth noting but not blocking:
+Real concerns worth surfacing but not blocking this merge:
 
-- Dead code / unused values
-- Code duplication that could be DRY-ed
-- Missing future-proofing
-- Design decisions worth documenting
-- Potential issues in edge cases that don't affect current usage
+- Tech debt introduced (acceptable now, follow-up worth tracking)
+- Missing test coverage on non-critical paths
+- Naming or abstraction improvements
+- Performance concerns that are not urgent
+- Internal-only documentation gaps
+- Non-critical refactoring opportunities
+- Pre-existing issues in code adjacent to but NOT touched by this PR
+- Pre-existing cross-repo docs gaps (file a tracking issue per Step 8/9 and reference its URL)
 
-### Suggestion (non-blocking)
+## Step 7: Draft the Review with Verdict Gate
 
-Improvements the author could consider:
+The review opens with a verdict line. Verdict event types:
 
-- Alternative approaches
-- Helper extraction opportunities
-- Naming improvements
+- **APPROVE** — no blockers
+- **REQUEST_CHANGES** — at least one blocker
+- **COMMENT** is forbidden by default; only allowed if the user explicitly requests a comment-only review
 
-## Step 6: Draft the Review
-
-Compose the review for user approval. The review consists of:
-
-### Review body (top-level comment)
-
-Short summary: what the PR does well, what needs attention. No fluff. 2-3 sentences max.
-
-If there are blockers: state how many and that they need fixing.
-If no blockers: acknowledge the good work briefly.
-
-### Inline comments
-
-Each finding becomes an inline comment on the specific file and line. Format:
-
-**For blockers:**
+Output structure:
 
 ```text
-[description of the problem]
+<Verdict>: <one-sentence why>
 
-[evidence: why this is a real issue — specific code paths, docs, or system behavior that proves it]
+**Business context**: <one sentence from Step 2>
 
-[suggested fix or approach]
+<If blockers exist:>
+## Blockers
+
+### B1: <concise title>
+**File**: path/to/file.ext:LINE
+**Issue**: <description>
+**Evidence**: <what was checked, what proves the issue> [Codex] [Claude + Codex]
+**Impact**: <what happens if this ships>
+**Fix**: <specific actionable suggestion>
+
+### B2: ...
+
+<If non-blocking follow-ups exist:>
+## Non-blocking follow-ups
+
+1. <description with file:line; if cross-repo docs gap, include the tracking-issue URL filed in Step 9>
+2. ...
+
+<If --ticket provided:>
+## Ticket Compliance
+
+**Ticket**: <title + link/ID>
+- [done|partial|missing] <requirement 1>
+- [done|partial|missing] <requirement 2>
+...
+
+**Verdict**: All requirements met | Missing: <list>
 ```
 
-**For observations:**
+Style rules:
 
-```text
-Observation (non-blocking): [description]
-```
+- **No praise**: no "great work", "overall looks good", "nice refactor", filler. Findings only.
+- **No AI attribution**: no "Claude says", "Codex flagged", "automated review found". The `[Claude + Codex]` / `[Codex]` tags after the Evidence line stay internal — strip them before publishing if the PR's audience is external.
+- **No private infrastructure**: never mention cluster names, client names, internal IPs, or environment identifiers in public reviews.
+- **No internal tool names**: do not name custom skills, slash commands, or tooling (`/pr-review`, `/branch-review`, plugin names) in the published body. Reviewers can be referenced as "Opus" / "Codex" generically if needed; never by tool path.
+- **Inline comments**: only for findings on lines that exist in the PR diff. Findings outside the diff go in the review body.
+- **One review, not a wall of text**: keep blockers focused and concise. The author should be able to act on each one independently.
 
-**For suggestions:**
+## Step 8: User Approval (MANDATORY)
 
-```text
-Suggestion (non-blocking): [description]
-```
+NEVER publish without user approval. This is a public action visible to the PR author.
 
-### Review event type
+Present:
 
-- If ANY blockers exist: `REQUEST_CHANGES`
-- If `--approve` flag AND no blockers: `APPROVE`
-- Otherwise (no blockers, no --approve): `COMMENT`
-
-## Step 7: User Approval (MANDATORY)
-
-**CRITICAL**: NEVER publish without user approval. This is a public action visible to the PR author.
-
-Present the complete review to the user:
-
-1. Review event type (REQUEST_CHANGES / APPROVE / COMMENT)
-2. Review body text
+1. Verdict event type (APPROVE / REQUEST_CHANGES / COMMENT)
+2. Full review body
 3. Each inline comment with file path and line number
-4. List of findings that were DISPROVEN and dropped (so user can verify the dismissal)
+4. List of DISPROVEN findings (so the user can verify dismissals)
+5. Drafts of any tracking issues (title + body) to be filed in Step 9 — title, target repo, and full body
 
-Ask: "Publish this review?" and wait for explicit confirmation.
+Wait for explicit confirmation. If the user requests changes, apply them and re-present.
 
-If the user requests changes to the review text — apply them and re-present.
+## Step 9: Publish
 
-## Step 8: Publish (or Update Existing Review)
+### 9a. File tracking issues (if any were prepared in Step 3)
 
-**CRITICAL**: Before creating a new review, check if you already have a review on this PR. Multiple reviews from the same user clutter the PR timeline and look unprofessional. If an existing review exists, UPDATE it instead of posting a new one.
+For each approved tracking issue:
 
-```bash
-# Check for existing review by the current user
-EXISTING_REVIEW_ID=$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
-  --jq "[.[] | select(.user.login == \"$(gh api user --jq .login)\")] | last | .id // empty")
+```python
+import json, subprocess
+
+issue = {"title": "<title>", "body": "<body>"}
+result = subprocess.run(
+    ["gh", "api", "repos/<owner>/<docs-repo>/issues",
+     "--method", "POST", "--input", "-"],
+    input=json.dumps(issue), text=True, capture_output=True
+)
+data = json.loads(result.stdout)
+print("Issue URL:", data["html_url"])
 ```
 
-### If updating an existing review
+Capture each URL and splice it into the review body under the relevant non-blocking follow-up.
+
+### 9b. Check for existing review by current user
+
+Multiple reviews from the same user clutter the timeline. If an active review with the same event type exists, UPDATE it; otherwise POST a new one.
 
 ```bash
-# Update the review body
+EXISTING_REVIEW_ID=$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
+  --jq "[.[] | select(.user.login == \"$(gh api user --jq .login)\") | select(.state != \"DISMISSED\")] | last | .id // empty")
+```
+
+### 9c. Update or create
+
+If updating:
+
+```bash
 gh api --method PUT "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews/$EXISTING_REVIEW_ID" \
   --field body="<new review body>"
-
-# To change the event (e.g., from REQUEST_CHANGES to APPROVE after fixes):
-# dismiss the old review, then submit a new one
 ```
 
-### If creating a new review
-
-Use `python3` with `json` module to properly serialize the payload (shell escaping of complex review bodies is unreliable):
+If creating, use python3 + `json.dumps` (shell escaping of complex review bodies is unreliable):
 
 ```python
 import json, subprocess
 
 review = {
     "commit_id": "<latest PR head SHA>",
-    "event": "REQUEST_CHANGES",  # or APPROVE or COMMENT
+    "event": "APPROVE",  # or REQUEST_CHANGES; never COMMENT by default
     "body": "<review body>",
     "comments": [
         {
             "path": "path/to/file.ext",
             "line": 42,
-            "body": "<comment text>"
+            "body": "<comment text — for findings on lines that exist in the diff>"
         }
     ]
 }
@@ -244,12 +364,16 @@ After publishing or updating, print the review URL so the user can verify it ren
 
 ## Important Rules
 
+- **Verdict mandatory**: every review ends with APPROVE or REQUEST_CHANGES, never COMMENT (unless the user explicitly asked for comment-only).
+- **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
+- **No speculation**: every finding must have an `**Evidence**:` line. Without evidence, drop.
+- **No-docs-found ≠ docs-OK**: open the relevant existing user-facing doc page and read it before declaring docs in sync.
+- **Pre-existing in cross-repo docs**: file a tracking issue (after user approval), reference it under non-blocking follow-ups, do not block.
+- **Pre-existing in code touched by the PR**: cascaded `/branch-review` treats these as blockers per its own rules. Do not soften them at this layer.
 - **Language**: ALL review content MUST be in English.
-- **No AI attribution**: Do not mention Claude, Codex, AI, or automated review in the published review. The review is from the user's GitHub account.
-- **No speculation**: If you cannot prove a finding, do not include it. "Might cause issues" is not acceptable — either prove it or drop it.
-- **Respect existing reviews**: Read existing review comments on the PR. Do not repeat points already made by other reviewers unless adding new evidence.
-- **One review, not a wall of text**: Keep inline comments focused and concise. The PR author should be able to act on each comment independently.
-- **No private infrastructure details**: Never mention cluster names, client names, internal IPs, or environment identifiers in public reviews.
-- **Address bot comments**: If bots (CodeRabbit, Gemini, etc.) left valid findings that the author hasn't responded to, include a general note asking the author to address them. Do not repeat bot findings verbatim — reference them.
-- **Update, don't duplicate**: If you already have a review on this PR, UPDATE the existing review body instead of creating a new one. Multiple reviews from the same person are noisy and unprofessional.
-- **Always use origin/ refs**: When computing diffs locally, ALWAYS use `origin/<branch>` — never bare branch names. Local branches go stale and produce phantom diffs that include already-merged commits.
+- **No AI attribution in published text**: the review is from the user's GitHub account. Tags like `[Claude + Codex]` are internal — strip before publishing.
+- **Respect existing reviews**: read existing review comments. Do not repeat points already raised by other reviewers unless adding new evidence.
+- **No private infrastructure details**: never mention cluster names, client names, internal IPs, or environment identifiers.
+- **No internal tool names**: do not name slash commands, skills, or plugin paths in the published body.
+- **Update, don't duplicate**: if you have an active review on this PR, UPDATE it rather than creating a new one.
+- **Always use `origin/` refs**: when computing diffs locally, ALWAYS use `origin/<branch>`. Bare branch names go stale and produce phantom diffs.
