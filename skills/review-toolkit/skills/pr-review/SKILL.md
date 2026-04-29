@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: Post a GitHub PR review with inline comments. Runs the five-frame substance pass (problem real / approach optimal / tradeoffs / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, presents draft for approval, then publishes via GitHub API. Reviews land on APPROVE or REQUEST_CHANGES — never observation-only.
+description: Post a GitHub PR review with inline comments. Runs the five-frame substance pass (problem real / approach optimal / tradeoffs / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, presents draft for approval, then publishes via GitHub API. Reviews open with an LGTM or NOT LGTM verdict (matching the /branch-review convention) — never observation-only.
   TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples: "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for: replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
 argument-hint: "[PR number] [--approve] [--target branch] [--ticket URL|ID]"
 ---
@@ -12,7 +12,7 @@ argument-hint: "[PR number] [--approve] [--target branch] [--ticket URL|ID]"
 Parse $ARGUMENTS for:
 
 - PR number (positional, optional). If omitted, detect from current branch: `gh pr view --json number --jq .number 2>/dev/null`
-- `--approve` — submit as APPROVE explicitly even when no blockers found (default behavior is APPROVE without blockers, so this flag is informational)
+- `--approve` — submit as LGTM (APPROVE event) explicitly even when no blockers found (default behavior is LGTM without blockers, so this flag is informational)
 - `--target` — target branch override (passed through to `/branch-review`)
 - `--ticket` — external ticket reference (URL or ID) for cross-referencing requirements beyond the PR description; activates the Ticket Compliance section in the output
 
@@ -201,7 +201,7 @@ Counter-example (rejected as speculation):
 
 Two categories. If a finding fits neither, drop it.
 
-### Blockers (REQUEST_CHANGES)
+### Blockers (NOT LGTM verdict, REQUEST_CHANGES event)
 
 The PR MUST NOT merge with any of these present:
 
@@ -231,16 +231,19 @@ Real concerns worth surfacing but not blocking this merge:
 
 ## Step 7: Draft the Review with Verdict Gate
 
-The review opens with a verdict line. Verdict event types:
+The review opens with a textual verdict line. The verdict text and the GitHub API event are two distinct layers:
 
-- **APPROVE** — no blockers
-- **REQUEST_CHANGES** — at least one blocker
-- **COMMENT** is forbidden by default; only allowed if the user explicitly requests a comment-only review
+| Textual verdict (first line of body) | GitHub API event |
+| --- | --- |
+| `LGTM` | `APPROVE` |
+| `NOT LGTM` | `REQUEST_CHANGES` |
+
+Use **LGTM** when there are no blockers, **NOT LGTM** when there is at least one. `COMMENT` event is forbidden by default; only allowed if the user explicitly requests a comment-only review (and even then the body should still open with a clear verdict word).
 
 Output structure:
 
 ```text
-<Verdict>: <one-sentence why>
+<LGTM | NOT LGTM> — <one-sentence why>
 
 **Business context**: <one sentence from Step 2>
 
@@ -288,7 +291,7 @@ NEVER publish without user approval. This is a public action visible to the PR a
 
 Present:
 
-1. Verdict event type (APPROVE / REQUEST_CHANGES / COMMENT)
+1. Textual verdict (LGTM / NOT LGTM) and the corresponding API event (APPROVE / REQUEST_CHANGES) — both, so the user sees the body opener and the GitHub UI label.
 2. Full review body
 3. Each inline comment with file path and line number
 4. List of DISPROVEN findings (so the user can verify dismissals)
@@ -319,7 +322,7 @@ Capture each URL and splice it into the review body under the relevant non-block
 
 ### 9b. Check for existing review by current user
 
-Multiple reviews from the same user clutter the timeline. If an active review with the same event type exists, UPDATE it; otherwise POST a new one.
+Multiple reviews from the same user clutter the timeline. If an active review with the same event type exists, UPDATE its body (the body should still open with the LGTM / NOT LGTM word); otherwise POST a new one.
 
 ```bash
 EXISTING_REVIEW_ID=$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
@@ -342,8 +345,8 @@ import json, subprocess
 
 review = {
     "commit_id": "<latest PR head SHA>",
-    "event": "APPROVE",  # or REQUEST_CHANGES; never COMMENT by default
-    "body": "<review body>",
+    "event": "APPROVE",  # APPROVE for LGTM, REQUEST_CHANGES for NOT LGTM. Never COMMENT by default.
+    "body": "<review body — first line is `LGTM — ...` or `NOT LGTM — ...`>",
     "comments": [
         {
             "path": "path/to/file.ext",
@@ -364,7 +367,7 @@ After publishing or updating, print the review URL so the user can verify it ren
 
 ## Important Rules
 
-- **Verdict mandatory**: every review ends with APPROVE or REQUEST_CHANGES, never COMMENT (unless the user explicitly asked for comment-only).
+- **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body, and the corresponding API event is APPROVE or REQUEST_CHANGES. COMMENT is forbidden by default (unless the user explicitly asked for comment-only).
 - **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
 - **No speculation**: every finding must have an `**Evidence**:` line. Without evidence, drop.
 - **No-docs-found ≠ docs-OK**: open the relevant existing user-facing doc page and read it before declaring docs in sync.
