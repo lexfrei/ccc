@@ -1,6 +1,7 @@
 ---
 name: pr-review
-description: Post a GitHub PR review with inline comments. Runs the five-frame substance pass, cascades /branch-review, performs sequential Claude+Codex analysis on the PR diff, cross-validates every finding against actual code/docs, presents draft for approval, then publishes via GitHub API. Designed to catch AI hallucinations — every claim must have evidence and the review must end with an APPROVE or REQUEST_CHANGES verdict.
+description: Post a GitHub PR review with inline comments. Runs the five-frame substance pass (problem real / approach optimal / tradeoffs / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, presents draft for approval, then publishes via GitHub API. Reviews land on APPROVE or REQUEST_CHANGES — never observation-only.
+  TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples: "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for: replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
 argument-hint: "[PR number] [--approve] [--target branch] [--ticket URL|ID]"
 ---
 
