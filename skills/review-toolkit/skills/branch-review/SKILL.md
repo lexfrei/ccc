@@ -8,7 +8,18 @@ agent: general-purpose
 
 **Important**: If the current directory is not a git repository, ask the user where the target repository is located before proceeding.
 
-**CRITICAL**: NEVER run `git checkout`, `git switch`, or any command that changes the current branch. You MUST stay on whatever branch is active when you start. All analysis must use `git diff`, `git log`, and file reads — never branch switching.
+**CRITICAL**: Do not switch branches in the user's repo. If the active branch is the one to review, analyze it in place using `git diff`, `git log`, `git show`. If the active branch is NOT the target (for example when this skill is cascaded from `/pr-review` and the active branch is `master`/`main` while the target is a feature branch), create a temporary git worktree pinned to the target branch and run all analysis there:
+
+```bash
+WORKTREE_DIR=$(mktemp -d -t branch-review-XXXX)
+trap 'git worktree remove --force "$WORKTREE_DIR" 2>/dev/null' EXIT INT TERM
+git worktree add "$WORKTREE_DIR" <target-branch>
+# All git operations use: git -C "$WORKTREE_DIR" diff/log/show ...
+# All file reads are relative to "$WORKTREE_DIR"
+# The trap above removes the worktree on every exit path (success, error, interrupt)
+```
+
+Rationale: switching branches in the user's main repo would clobber their working state. A worktree gives an isolated checkout of the target branch without disturbing the active one. The "stay on the active branch" intent is preserved — the active branch is never touched.
 
 ## Arguments
 
@@ -35,7 +46,7 @@ Examples:
 
 ## Setup
 
-**If a path argument was provided**, use it as the working directory for ALL git and file operations throughout the review. Pass `-C <path>` to every `git` command, and use the path as the base for all file reads.
+**If a path argument was provided**, use it as the working directory for ALL git and file operations throughout the review. Pass `-C <path>` to every `git` command, and use the path as the base for all file reads. When a path is provided, assume the user has pointed at the right tree — do not create a worktree even if the active branch differs from the target.
 
 **First, record the current branch** (you will need it throughout):
 
@@ -45,8 +56,6 @@ REVIEW_BRANCH=$(git branch --show-current)
 # With path argument:
 REVIEW_BRANCH=$(git -C <path> branch --show-current)
 ```
-
-All analysis MUST be performed from this branch. Use `git diff`, `git log`, `git show` for comparisons — these do NOT require switching branches.
 
 Determine target branch (the branch this PR is merging INTO):
 
@@ -61,10 +70,16 @@ Determine target branch (the branch this PR is merging INTO):
 
 **Print the resolved target branch** so the user can verify it is correct (e.g. "Reviewing against target branch: `next`").
 
-Find the merge base (the point where the current branch diverged from the target):
+**Decide whether a worktree is needed.** Compare `REVIEW_BRANCH` to the branch being reviewed:
+
+- If a path argument was provided: trust it, no worktree.
+- Else if `REVIEW_BRANCH` matches the branch to review: analyze in place, no worktree.
+- Else (active branch is different — typical when cascaded from `/pr-review`): create a worktree at the branch to review per the worktree block in the CRITICAL section above. From this point on, `<path>` refers to that worktree path. Cleanup runs via the `trap` on exit.
+
+Find the merge base (the point where the branch being reviewed diverged from the target):
 
 ```bash
-MERGE_BASE=$(git merge-base $REVIEW_BRANCH <target-branch>)
+MERGE_BASE=$(git -C <path> merge-base $REVIEW_BRANCH <target-branch>)
 ```
 
 ## Loading the ticket
