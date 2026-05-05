@@ -1,18 +1,22 @@
 ---
 name: pr-review
-description: Post a GitHub PR review with inline comments. Runs the five-frame substance pass (problem real / approach optimal / tradeoffs / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, presents draft for approval, then publishes via GitHub API. Reviews open with an LGTM or NOT LGTM verdict (matching the /branch-review convention) — never observation-only.
-  TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples: "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for: replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
-argument-hint: "[PR number] [--approve] [--target branch] [--ticket URL|ID]"
+description: >
+  Draft a GitHub PR review with inline comments. Runs the five-frame substance pass (problem real / approach optimal / tradeoffs / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, and presents the draft for approval. Publishing the review to GitHub is opt-in via `--publish`; without it the draft is the deliverable. Reviews open with an LGTM or NOT LGTM verdict (matching the /branch-review convention) — never observation-only.
+  TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples — "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for — replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
+argument-hint: "[PR number] [--publish] [--approve] [--target branch] [--ticket URL|ID]"
 ---
 
-**CRITICAL**: This skill produces a PUBLISHED GitHub review visible to the PR author and all watchers. Every word matters. Every claim must be proven. User MUST approve the text before publishing.
+**CRITICAL**: When `--publish` is passed, this skill produces a PUBLISHED GitHub review visible to the PR author and all watchers. Every word matters. Every claim must be proven. User MUST approve the text before publishing.
+
+Default behavior is **draft only**: the skill performs the full analysis, presents the review and inline comments to the user, and stops. Nothing is sent to GitHub unless `--publish` is set.
 
 ## Arguments
 
 Parse $ARGUMENTS for:
 
 - PR number (positional, optional). If omitted, detect from current branch: `gh pr view --json number --jq .number 2>/dev/null`
-- `--approve` — submit as LGTM (APPROVE event) explicitly even when no blockers found (default behavior is LGTM without blockers, so this flag is informational)
+- `--publish` — actually post the review to GitHub via the API. Without this flag the skill stops after presenting the draft; the draft is the deliverable. Required separately from `--approve` so that the LGTM/NOT-LGTM decision and the publish action are independent.
+- `--approve` — submit as LGTM (APPROVE event) explicitly even when no blockers found (default verdict policy is LGTM without blockers, so this flag is informational). Has no effect unless `--publish` is also set.
 - `--target` — target branch override (passed through to `/branch-review`)
 - `--ticket` — external ticket reference (URL or ID) for cross-referencing requirements beyond the PR description; activates the Ticket Compliance section in the output
 
@@ -285,21 +289,21 @@ Style rules:
 - **Inline comments**: only for findings on lines that exist in the PR diff. Findings outside the diff go in the review body.
 - **One review, not a wall of text**: keep blockers focused and concise. The author should be able to act on each one independently.
 
-## Step 8: User Approval (MANDATORY)
-
-NEVER publish without user approval. This is a public action visible to the PR author.
+## Step 8: Present the Draft
 
 Present:
 
-1. Textual verdict (LGTM / NOT LGTM) and the corresponding API event (APPROVE / REQUEST_CHANGES) — both, so the user sees the body opener and the GitHub UI label.
+1. Textual verdict (LGTM / NOT LGTM) and the corresponding API event (APPROVE / REQUEST_CHANGES) the published version would carry — both, so the user sees the body opener and the GitHub UI label.
 2. Full review body
 3. Each inline comment with file path and line number
 4. List of DISPROVEN findings (so the user can verify dismissals)
-5. Drafts of any tracking issues (title + body) to be filed in Step 9 — title, target repo, and full body
+5. Drafts of any tracking issues (title + body) that publish-mode would file in Step 9 — title, target repo, and full body
 
-Wait for explicit confirmation. If the user requests changes, apply them and re-present.
+If `--publish` was **not** passed, this is the deliverable — STOP here. Do not call `gh api`, do not file tracking issues, do not invoke any write-side GitHub API. The user can re-run with `--publish` after reviewing.
 
-## Step 9: Publish
+If `--publish` **was** passed: this output is now an approval gate. Wait for explicit confirmation before continuing to Step 9. If the user requests changes, apply them and re-present. **Never** call the publish steps without that explicit confirmation — `--publish` enables the option, the user's approval triggers the action.
+
+## Step 9: Publish (only when `--publish` was passed AND user approved in Step 8)
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
@@ -367,6 +371,7 @@ After publishing or updating, print the review URL so the user can verify it ren
 
 ## Important Rules
 
+- **Publish is opt-in**: nothing is sent to GitHub unless the invocation included `--publish` AND the user approved the draft in Step 8. The default mode is local draft only.
 - **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body, and the corresponding API event is APPROVE or REQUEST_CHANGES. COMMENT is forbidden by default (unless the user explicitly asked for comment-only).
 - **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
 - **No speculation**: every finding must have an `**Evidence**:` line. Without evidence, drop.
