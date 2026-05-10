@@ -66,6 +66,8 @@ Three GitHub objects can carry blocking feedback on a PR. The skill must read al
 Also pull `reviewDecision` so the skill knows when the PR is blocked but no findings remain after filtering — that almost always means a finding was missed.
 
 ```bash
+SELF_LOGIN=$(gh api user --jq .login)
+
 gh api graphql -F owner="$OWNER" -F repo="$REPO" -F pr=$PR_NUMBER -f query='
 query($owner: String!, $repo: String!, $pr: Int!) {
   repository(owner: $owner, name: $repo) {
@@ -87,6 +89,12 @@ query($owner: String!, $repo: String!, $pr: Int!) {
               author { login }
               bodyText
               url
+              createdAt
+            }
+          }
+          latestComment: comments(last: 1) {
+            nodes {
+              author { login }
               createdAt
             }
           }
@@ -113,6 +121,7 @@ query($owner: String!, $repo: String!, $pr: Int!) {
 Filter:
 
 - **Threads** — keep where `isResolved == false`.
+- **Threads (self-reply guard)** — additionally drop any thread where `latestComment.nodes[0].author.login == $SELF_LOGIN`. This prevents duplicate replies on re-runs against PRs with reviewers that do not auto-resolve threads after a fix lands (e.g. Gemini Code Assist). Empty `latestComment.nodes` is treated as "not me" and the thread is kept. To genuinely re-engage a previously-replied thread, the operator posts the reply manually outside the skill flow.
 - **Review submissions** — keep where `state == "CHANGES_REQUESTED"` (always, even with empty body — surface as ASK so the user explains the block). For `state == "COMMENTED"`, keep only if `body != ""` AND `comments.totalCount == 0` (a COMMENTED review with inline comments is already covered by the threads query; its body is usually a meta-summary).
 - **Issue comments** (separate REST call):
 
@@ -283,4 +292,5 @@ Do not resolve threads automatically. The reviewer (human or bot) decides whethe
 - **Ask when uncertain**: if the verdict is a judgment call or the fix touches something sensitive, use `AskUserQuestion` before committing anything. Do not guess on contested threads.
 - **No thread resolution**: do not call `resolveReviewThread`. That is the reviewer's prerogative.
 - **Show evidence**: the user must be able to audit any thread quickly from the approval message.
+- **No self-reply duplication**: the Step 4 fetch drops threads whose latest comment is already from the current user. This is the default and applies to every re-run on the same PR.
 - **Return to the original branch** at the end when safe (working tree was clean at start).
