@@ -83,6 +83,7 @@ If no PR references provided, look in the conversation context for recently ment
 - If multiple PRs: separate each block with an empty line.
 - After generating all TLDRs, copy the complete text to clipboard:
   - macOS: pipe to `pbcopy`
-  - Linux: pipe to `xclip -selection clipboard` or `xsel --clipboard --input`
+  - Linux (Wayland): pipe to `wl-copy`
+  - Linux (X11): pipe to `xclip -selection clipboard` or `xsel --clipboard --input`
   - If no clipboard tool available: print the text and note that clipboard copy failed.
 - Confirm to user: "Done, copied to clipboard".
