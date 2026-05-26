@@ -1,0 +1,9 @@
+{
+  "name": "md-no-hardwrap",
+  "version": "1.0.0",
+  "description": "PreToolUse hook: reject Write/Edit on markdown files when a paragraph spans more than one line. Enforces 'one continuous line per paragraph' so the renderer wraps to viewer width instead of fighting hardwraps inside paragraphs.",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

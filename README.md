@@ -82,6 +82,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | Plugin | Description |
 | --- | --- |
 | **golangci-lint** | Auto-run golangci-lint on package when Go files are edited |
+| **md-no-hardwrap** | PreToolUse hook: reject `Write`/`Edit` on markdown files when a paragraph spans more than one line — enforces "one continuous line per paragraph" so renderers wrap to viewer width instead of fighting hardwraps in the source |
 | **worksync** | Daily work-sync markdown log — PostToolUse hook captures `gh pr/issue create/merge/close` automatically, companion skill logs research/ops/checkpoint events (prompts for vault path on install, works with Obsidian, Logseq, or plain markdown) |
 
 ## License
