@@ -48,6 +48,12 @@ Everything else is treated as prose: consecutive prose lines form one paragraph,
 and any paragraph longer than ONE LINE is a violation. The renderer collapses
 soft breaks to spaces anyway -- the hardwrap is purely a readability hazard on
 narrow viewports and a friction source for diff review.
+
+Special-case exemption: a paragraph whose every line is a badge (`[![...]...`)
+or bare image (`![...]...`) row passes through unflagged. The canonical
+GitHub README shields stack puts one shield per line as a column; collapsing
+them would be wrong. A MIXED paragraph (some badges, some prose) is still a
+violation -- that's almost always a wrapped-prose bug.
 """
 
 from __future__ import annotations
@@ -82,6 +88,16 @@ _RE_HTML_COMMENT_CLOSE = re.compile(r"-->\s*$")
 _RE_FENCE = re.compile(r"^\s*(```|~~~)")
 _RE_HR = re.compile(r"^\s*([-*_])(\s*\1){2,}\s*$")
 _RE_FRONT_MATTER = re.compile(r"^\s*(---|\+\+\+)\s*$")
+# Badge / image-link rows: canonical GitHub README layout puts one shield or
+# image per line as a column. The lines collectively look like a "paragraph"
+# (no blank lines between, no list-marker prefix), so they would otherwise
+# trip the multi-line-paragraph rule. A paragraph composed ENTIRELY of these
+# rows is exempted -- a single per-line shield is the conventional shape and
+# collapsing them onto one line would be wrong. A MIXED paragraph (some
+# badges, some prose) still triggers, because that's almost certainly a
+# wrapped-prose bug rather than an intentional layout.
+_RE_BADGE_ROW = re.compile(r"^\s*\[!\[")  # [![alt](img)](href)
+_RE_IMAGE_ROW = re.compile(r"^\s*!\[")    # ![alt](img) without surrounding link
 # Admonition CONTENT is indented under the opener. We treat 4-space-indented
 # continuation lines as still inside the admonition -- they ARE prose and
 # multi-line indented prose is still a hardwrap. So indent does NOT escape the
@@ -91,6 +107,15 @@ _RE_FRONT_MATTER = re.compile(r"^\s*(---|\+\+\+)\s*$")
 
 def is_blank(line: str) -> bool:
     return line.strip() == ""
+
+
+def is_badge_or_image_row(line: str) -> bool:
+    """Return True iff line is a badge (`[![…`) or bare image (`![…`) row.
+
+    Used by the close-paragraph step to exempt a paragraph whose every line
+    is one of these shapes -- canonical README badge stacks.
+    """
+    return bool(_RE_BADGE_ROW.match(line) or _RE_IMAGE_ROW.match(line))
 
 
 def classify_non_paragraph(line: str) -> bool:
@@ -139,13 +164,18 @@ def find_violations(content: str) -> list[Violation]:
     def close_paragraph(end_line_inclusive: int) -> None:
         nonlocal para_start, para_lines
         if para_start is not None and len(para_lines) > 1:
-            violations.append(
-                Violation(
-                    start_line=para_start,
-                    end_line=end_line_inclusive,
-                    text=" | ".join(s.strip() for s in para_lines),
+            # Exempt paragraphs whose every line is a badge / image row -- the
+            # canonical README shields stack is one-per-line by convention,
+            # not a hardwrap. A mixed paragraph (some badges, some prose) is
+            # still a violation; that's almost always wrapped prose.
+            if not all(is_badge_or_image_row(line) for line in para_lines):
+                violations.append(
+                    Violation(
+                        start_line=para_start,
+                        end_line=end_line_inclusive,
+                        text=" | ".join(s.strip() for s in para_lines),
+                    )
                 )
-            )
         para_start = None
         para_lines = []
 
