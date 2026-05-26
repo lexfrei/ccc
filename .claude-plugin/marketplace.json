@@ -179,6 +179,12 @@
       "category": "productivity"
     },
     {
+      "name": "md-no-hardwrap",
+      "description": "PreToolUse hook: reject Write/Edit on markdown files when a paragraph spans more than one line. Enforces 'one continuous line per paragraph' so renderers wrap to viewer width instead of fighting hardwraps baked into the source",
+      "source": "./hooks/md-no-hardwrap",
+      "category": "quality"
+    },
+    {
       "name": "mcp-tg",
       "description": "MCP server for Telegram Client API (MTProto) — messaging, contacts, groups, channels, media, stickers via user account",
       "source": "./mcp/mcp-tg",
