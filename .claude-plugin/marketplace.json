@@ -146,6 +146,12 @@
       "category": "infrastructure"
     },
     {
+      "name": "pore-analysis",
+      "description": "Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi coordination, radial g(r) and orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes — no hardcoded autodetect, so it adapts to different instruments and scale-bar formats.",
+      "source": "./skills/pore-analysis",
+      "category": "science"
+    },
+    {
       "name": "mcp-loki",
       "description": "MCP server for querying Grafana Loki logs — LogQL queries, label discovery, series exploration, and index statistics",
       "source": "./mcp/mcp-loki",
