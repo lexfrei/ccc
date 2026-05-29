@@ -68,6 +68,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **say** | Speak text aloud using macOS TTS with automatic voice selection |
 | **slack-formatter** | Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved |
 | **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode per route kind; applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only — no git operations |
+| **pore-analysis** | Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi, radial g(r) + orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes — no hardcoded autodetect |
 
 ### MCP Servers
 
