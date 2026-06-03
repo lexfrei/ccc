@@ -1,7 +1,7 @@
 {
   "name": "cleanup",
-  "version": "1.0.0",
-  "description": "Local disk cleanup utilities: stale git worktrees, dead personal forks, Docker prune, and Go caches — each runs report → confirm → execute, plus one orchestrating pipeline",
+  "version": "1.1.0",
+  "description": "Local disk cleanup utilities: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders), Go caches, and Homebrew — each runs report → confirm → execute with interactive prompts, plus one orchestrating pipeline",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
