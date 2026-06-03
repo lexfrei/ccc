@@ -196,6 +196,12 @@
       "source": "./mcp/mcp-tg",
       "category": "productivity",
       "homepage": "https://github.com/lexfrei/mcp-tg"
+    },
+    {
+      "name": "cleanup",
+      "description": "Local disk cleanup utilities: stale git worktrees, dead personal forks, Docker prune, and Go caches — each runs report → confirm → execute, plus one orchestrating pipeline",
+      "source": "./skills/cleanup",
+      "category": "productivity"
     }
   ]
 }
