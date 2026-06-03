@@ -2,21 +2,22 @@
 name: worktree-sweep
 description: Find and remove stale git worktrees across one or many repositories. Classifies each extra worktree as clean / dirty / locked, measures reclaimable space, then removes the safe ones after approval. TRIGGER when the user wants to clean up, prune, or audit git worktrees ("remove old worktrees", "почисти worktree", "what worktrees can I delete"). DO NOT trigger for deleting whole repositories or non-worktree directories.
 disable-model-invocation: true
-argument-hint: "[path] [--all-repos]"
+argument-hint: "[path]"
 ---
 
 Find and remove stale git worktrees, then report reclaimed space.
 
-Operates in **report → confirm → execute** order. Nothing is removed until the user approves the plan. After approval, perform the removals autonomously.
+Operates in **report → confirm → execute** order. Nothing is removed until the user approves the plan. After approval, perform the removals autonomously. Choices are gathered through interactive questions, not flags.
 
 ## Step 0: Determine the scan scope (never hardcode paths)
 
 Resolve where to look, in this priority order:
 
-1. A path passed in `$ARGUMENTS` — use it verbatim.
-2. If the current working directory is inside a git repository and `--all-repos` was **not** passed — scope to that single repository.
-3. If `--all-repos` was passed — find the hosting root by walking up from the current directory to the common clone root (the ancestor that contains many `<owner>/<repo>` directories). Confirm the resolved root with the user before scanning.
-4. If none of the above resolves unambiguously — **ask the user** for the directory to scan. Do not assume a default like `~/git`.
+1. A path passed in `$ARGUMENTS` — use it verbatim as the scan root.
+2. Otherwise, if the current working directory is inside a git repository, **ask the user** (interactive question) which scope to use:
+   - **this repository only** — the repo the current directory belongs to;
+   - **all repositories under the clone root** — find the hosting root by walking up to the common ancestor that contains many `<owner>/<repo>` directories, and show the resolved root in the question so the user can confirm or correct it.
+3. If the current directory is not inside a repository and no path was given — **ask the user** for the directory to scan. Do not assume a default like `~/git`.
 
 For multi-repo scope, enumerate repositories by locating each `.git` directory (a directory, not a gitdir file) under the resolved root.
 
@@ -56,7 +57,7 @@ For every candidate worktree path `$WT`:
 
 Measure reclaimable size per candidate with `du -sk "$WT"` and total it.
 
-## Step 3: Report
+## Step 3: Report and ask
 
 Present a table: repository, worktree path, branch (or `detached HEAD`), classification, size. Sum the reclaimable total for the clean + stale-locked set. Call out separately:
 
@@ -64,14 +65,14 @@ Present a table: repository, worktree path, branch (or `detached HEAD`), classif
 - dirty worktrees (held back pending Step 4),
 - live-locked worktrees (skipped).
 
-Ask for approval to remove the safe set.
+Then **ask the user** (interactive question) which set to remove — e.g. the safe set (clean + stale-locked), or a narrower selection. Nothing is removed without that approval.
 
 ## Step 4: Triage dirty worktrees
 
 Do not blanket-remove dirty worktrees. Show the diff/stat and decide per item:
 
 - **Trivial drift** — regenerated lockfiles (`package-lock.json`, `go.sum`), generated code (`zz_generated.*`), editor cruft, stray binaries not in git. Safe to discard with approval.
-- **Real work** — hand-written source changes, an uncommitted refactor. Offer to keep the worktree, or commit/stash the change first, before removing. Never silently discard real work.
+- **Real work** — hand-written source changes, an uncommitted refactor. **Ask the user** whether to keep the worktree, commit/stash the change first, or discard it. Never silently discard real work.
 
 ## Step 5: Execute (after approval)
 

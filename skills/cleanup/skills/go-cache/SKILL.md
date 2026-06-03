@@ -1,13 +1,12 @@
 ---
 name: go-cache
-description: Reclaim Go disk by clearing the build, test, fuzz, and module caches. Measures each cache first, then cleans after approval. TRIGGER when the user wants to free Go cache space ("clean go cache", "почисти go кеши", "reclaim GOMODCACHE"). DO NOT trigger for cleaning a specific module or running go mod tidy.
+description: Reclaim Go disk by clearing the build, test, fuzz, and module caches. Measures each cache first, then cleans the user-chosen scope after approval. TRIGGER when the user wants to free Go cache space ("clean go cache", "почисти go кеши", "reclaim GOMODCACHE"). DO NOT trigger for cleaning a specific module or running go mod tidy.
 disable-model-invocation: true
-argument-hint: "[--keep-modcache]"
 ---
 
 Reclaim Go cache disk space, then report what was freed.
 
-Operates in **report → confirm → execute** order. After approval, run the cleanup autonomously.
+Operates in **report → confirm → execute** order. The scope is chosen through an interactive question, not flags. After approval, run the cleanup autonomously.
 
 ## Step 1: Locate and measure the caches
 
@@ -20,18 +19,16 @@ go env GOCACHE GOMODCACHE
 
 Measure both: `du -sh "$GOCACHE"` and `du -sh "$GOMODCACHE"`. If `go` is not installed, stop and say so.
 
-## Step 2: Report
+## Step 2: Report and ask (interactive)
 
-Show the size of each cache and the total reclaimable. State the scope:
+Show the size of each cache and the total reclaimable, then **ask the user** (interactive question) which scope to clear:
 
-- **default**: clears build + test + fuzz **and** the module cache.
-- **with `--keep-modcache`**: clears build + test + fuzz only, leaving downloaded modules in place (avoids a large re-download on the next build).
+- **build + test + fuzz only** — keeps the module cache, so the next build does not re-download dependencies.
+- **everything, including the module cache** — frees the most, but the next build re-downloads all modules.
 
-## Step 3: Confirm
+Note that either way the next build is slower while caches repopulate.
 
-Ask for approval. Note that the next build will be slower while caches repopulate (and, unless `--keep-modcache`, will re-download dependencies).
-
-## Step 4: Execute (after approval)
+## Step 3: Execute (after approval)
 
 Build, test, and fuzz caches:
 
@@ -39,7 +36,7 @@ Build, test, and fuzz caches:
 go clean -cache -testcache -fuzzcache
 ```
 
-Module cache (unless `--keep-modcache`):
+Module cache (only if the user chose to include it):
 
 ```bash
 go clean -modcache
@@ -47,6 +44,6 @@ go clean -modcache
 
 `go clean -modcache` handles the read-only permission bits that Go sets on cached module files — no manual `chmod` needed.
 
-## Step 5: Report
+## Step 4: Report
 
-Re-measure `GOCACHE` and `GOMODCACHE` and report the space reclaimed, plus what was kept (`--keep-modcache`, if used).
+Re-measure `GOCACHE` and `GOMODCACHE` and report the space reclaimed, plus what was kept (the module cache, if the user kept it).

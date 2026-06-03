@@ -2,17 +2,17 @@
 name: stale-forks
 description: Find personal forks that no longer carry value — their unique commits are already merged upstream, or they hold no unique commits at all — and remove the local clone after approval. Optionally delete the GitHub fork too. TRIGGER when the user wants to clean up dead forks ("remove merged forks", "почисти бесполезные форки", "which forks can I drop"). DO NOT trigger for non-fork repositories or for forks with open PRs / unmerged work.
 disable-model-invocation: true
-argument-hint: "[path] [--delete-remote]"
+argument-hint: "[path]"
 ---
 
 Find personal forks that are no longer useful and reclaim their space.
 
-Operates in **report → confirm → execute** order. After approval, remove the local clones autonomously. Deleting the **GitHub** fork is a separate, explicit confirmation (it is irreversible and outward-facing).
+Operates in **report → confirm → execute** order. After approval, remove the local clones autonomously. Deleting the **GitHub** fork is a separate interactive confirmation (it is irreversible and outward-facing). Choices are gathered through interactive questions, not flags.
 
 ## Step 0: Determine the scan scope (never hardcode paths)
 
 1. A path in `$ARGUMENTS` → use it.
-2. Otherwise infer the hosting root by walking up from the current directory to the common clone root, and **confirm it with the user**.
+2. Otherwise infer the hosting root by walking up from the current directory to the common clone root, and **ask the user** to confirm or correct it (interactive question).
 3. If unresolved → **ask** for the directory to scan. Do not assume a default.
 
 Enumerate repositories under the resolved root (each `.git` directory).
@@ -28,50 +28,40 @@ A repository is a **personal fork** when:
 
 Skip anything that is not a personal fork. Record the upstream `nameWithOwner` and default branch for each fork.
 
+A fast inventory shortcut for many forks: `gh repo list "$ME" --fork --limit 300 --json name,parent,defaultBranchRef`, then intersect with local clones present under the root.
+
 ## Step 2: Assess usefulness
 
-For each fork, refresh refs first: `git -C "$REPO" fetch --all --quiet` (and `git fetch upstream` if that remote exists).
-
-Resolve the upstream default branch (`gh repo view <upstream> --json defaultBranchRef` or `git remote show upstream`). Then evaluate:
+Removing a local clone while keeping the GitHub fork is reversible (re-clone later), so the **only irrecoverable risk is local-only work**. Check it first, cheaply, with no network:
 
 - **Dirty** — uncommitted changes (`git status --porcelain` non-empty) → **keep**, flag it.
-- **Unique commits** — any commit on any local branch or on `origin/*` that is not reachable from `upstream/<default>`:
+- **Local-only commits** — commits on any local branch not present on any remote: `git -C "$REPO" log --oneline --branches --not --remotes`. Non-empty → **keep**, flag it (removing the clone would lose them).
 
-  ```bash
-  git -C "$REPO" log --oneline --branches --remotes --not upstream/<default> | head
-  ```
+Then assess whether the fork itself is still useful (this is what makes it a *candidate*, vs just reclonable):
 
-  If empty → the fork contributes nothing beyond upstream. This compares against the upstream **default** branch only; a fork whose work was merged into a non-default upstream branch (e.g. `release-*`, `develop`) will conservatively show unique commits and be kept — a safe-by-default bias, never a false deletion.
-- **Open PRs** — does the fork have an open PR into upstream?
-
-  ```bash
-  gh pr list --repo <upstream> --state open --author "$ME" --json headRefName,url
-  ```
-
-  If any → **keep**, flag it.
+- **Unique commits vs upstream** — `git -C "$REPO" log --oneline --branches --remotes --not upstream/<default>` (resolve the upstream default branch first). Empty → contributes nothing beyond upstream. This compares against the **default** branch only; work merged into a non-default upstream branch will conservatively show as unique and be kept — safe-by-default, never a false deletion.
+- **Open PRs** — `gh pr list --repo <upstream> --state open --author "$ME"` (or one cross-repo pass: `gh search prs --author=@me --state=open`). An open PR means the fork is active → flag.
 
 Classify:
 
-- **Dead — already merged / no unique commits**: no unique commits, no open PR, not dirty → removal candidate.
-- **Has unique unmerged commits, no open PR**: possible abandoned work → **flag, do not auto-select**. Let the user decide explicitly.
-- **Keep**: dirty, or has an open PR.
+- **Dead / reclonable** — no local-only work (everything pushed). The clone can be removed and re-cloned on demand. Strongest candidates are those that are also merged/no-unique-commits with no open PR.
+- **Keep** — dirty, local-only commits, or an open PR you are actively driving.
 
-## Step 3: Report
+## Step 3: Report and ask
 
-Table: fork, upstream, classification, reason, local size (`du -sh`). List removal candidates separately from flagged-keep. Show the total reclaimable size of the candidate set. Ask for approval.
+Table: fork, upstream, classification, reason, local size (`du -sh`). Group removal candidates separately from keep/flagged, with the total reclaimable size. Then **ask the user** (interactive question) which set of local clones to remove — e.g. only dead-and-reclonable, or all reclonable (including active-PR clones, which would then need a re-clone to resume).
 
 ## Step 4: Execute (after approval)
 
-For each approved dead fork:
+For each approved fork, remove the local clone directory tree (the whole repo directory) to reclaim the disk. If read-only cache directories block removal, restore the write bit first (`chmod -R u+w`).
 
-1. Remove the local clone directory tree (the whole repo directory). This reclaims the disk space.
-2. **GitHub fork** — only if `--delete-remote` was passed **and** the user confirms again for each fork (it is irreversible):
+Then, for the **GitHub** fork, **ask the user** (interactive question) whether to also delete it on GitHub — default **no**. Only on an explicit yes, per fork:
 
-   ```bash
-   gh repo delete <owner>/<repo> --yes
-   ```
+```bash
+gh repo delete <owner>/<repo> --yes
+```
 
-   This needs the `delete_repo` token scope (`gh auth refresh --scopes delete_repo` if missing). Without `--delete-remote`, leave the GitHub fork untouched and simply note that it can be deleted later.
+This needs the `delete_repo` token scope (`gh auth refresh --scopes delete_repo` if missing). If the user declines, leave the GitHub fork untouched and note it can be deleted later.
 
 ## Step 5: Report
 
