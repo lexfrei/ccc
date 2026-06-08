@@ -1,6 +1,6 @@
 ---
 name: tldrpr
-description: Generate plain-text TLDR for PRs (for Slack, copied to clipboard). Each entry includes change scope (+N/-M lines, K files), a 1-5 star review-effort rating (time to review) and a 1-5 star user-value rating (how much it matters to users) so the reader can both budget time and prioritise before opening the PR.
+description: Generate plain-text TLDR for PRs (for Slack, copied to clipboard). Each entry includes change scope (+N/-M lines, K files), a 1-5 star review-effort rating (time to review) and a 1-5 star outcome rating whose axis depends on the change — Pain relieved for fixes, Joy for features, Impact for internal work — so the reader can both budget time and prioritise before opening the PR.
 argument-hint: "<pr-url-or-ref> [pr-url-or-ref] ... [--lang <language>]"
 ---
 
@@ -57,29 +57,51 @@ If no PR references provided, look in the conversation context for recently ment
 
    When in doubt between two adjacent ratings, pick the higher one — the rating is meant to budget review time, and over-budgeting is cheaper than under-budgeting.
 
-4. Assign a **user-value** rating from 1 to 5 stars — how much this PR matters to the people who *use* the product (end users, operators), independent of how hard it is to review. The two axes are orthogonal: a one-line fix can be ★★★★★ user value (it stops a crash everyone hits) while being ★ to review; a 2000-line refactor can be ★ user value (invisible internal cleanup) while being ★★★★ to review. Judge by user-facing impact, not size.
+4. Assign the **outcome** rating — a 1-5 star score on a single axis whose *label* depends on what the PR does for the people who use the product. First pick the axis, then rate on it. The outcome axis is orthogonal to review effort: a one-line fix can relieve ★★★★★ pain while being ★ to review; a 2000-line refactor can be ★ internal Impact while being ★★★★ to review. Judge by user-facing outcome, not size.
 
-   ### User-value scale
+   ### Pick the axis
 
-   - **★ none/invisible** — internal refactor, CI/build, test-only, chore, comment or typo fix. Nothing a user can observe.
-   - **★★ minor** — small quality-of-life or DX nicety, a cosmetic tweak, or an edge-case fix few users hit.
-   - **★★★ moderate** — a real bug fix or useful feature that a meaningful subset of users will notice or have asked for.
-   - **★★★★ high** — fixes a painful, common bug / removes a frequent blocker / ships a widely-wanted capability; most active users benefit.
-   - **★★★★★ critical** — relieves severe or widespread pain: a security or data-loss fix users are exposed to, a crash or outage many hit, or an unblock for a previously-impossible workflow.
+   Default to the PR's Conventional-Commit type in the title, then override by the actual diff when the title lies — a `feat:` whose diff only fixes a regression is Pain; a `fix:` that mostly ships a new capability is Joy. The type is a signal, not a verdict.
 
-   ### User-value signals
+   - **Pain relieved** — `fix`, `revert`, a `perf` that removes a regression or slowness users feel, a `docs` change that documents a footgun or silent-failure prerequisite. Rates how much hurt the PR takes away.
+   - **Joy** — `feat`, a `perf` that delivers a wanted speedup, a `docs` change that ships a genuinely new guide or capability. Rates how much the PR delights or empowers users.
+   - **Impact (internal)** — `chore`, `ci`, `test`, `build`, `refactor`, `style`. Maintainer-only plumbing a user cannot observe; almost always ★.
 
-   - **Up** if the PR fixes a crash / hang / data-loss / security issue users actually hit, resolves a reported (or repeatedly-reported) community issue, removes a documented footgun or silent-failure mode, or unblocks a common workflow. User-facing docs count here too — documenting a prerequisite that otherwise causes a silent hang is real user value even though it is ★ to review.
-   - **Down** for internal refactors, test-only changes, CI/build, generated-file regeneration, or dependency bumps with no behavior change — low user value regardless of size.
-   - Judge for the product's *users*, not its maintainers. When in doubt between two adjacent ratings, pick the **lower** one — over-claiming value is noisier than under-claiming (the opposite bias from review effort, where you round up).
-   - Cap at ★★★★★, never below ★.
+   ### Pain-relieved scale (how strong a painkiller the fix is)
+
+   - **★ aspirin** — a trivial, barely-felt annoyance; an edge case almost no one hits.
+   - **★★ ibuprofen** — a small but real irritation a modest slice of users feel.
+   - **★★★ codeine** — a genuine bug a meaningful subset of users hit or have reported.
+   - **★★★★ oxycodone** — a frequent, painful blocker; most active users feel the relief.
+   - **★★★★★ morphine** — severe or widespread agony: a security / data-loss fix users are exposed to, or a crash / outage / hang many hit.
+
+   ### Joy scale
+
+   - **★ negligible** — a capability almost no one will notice.
+   - **★★ nice** — a pleasant quality-of-life or DX nicety.
+   - **★★★ useful** — a useful, wanted feature a meaningful subset of users will reach for.
+   - **★★★★ wanted** — a widely-wanted capability most active users benefit from.
+   - **★★★★★ delight** — a long-requested or workflow-unlocking capability that makes a previously-impossible thing possible.
+
+   ### Impact (internal) scale
+
+   - **★ internal** — invisible plumbing (refactor, CI, tests, build, chore). The default for this axis.
+   - **★★ internal+** — internal work with an indirect user upside (reliability or maintainability that unblocks later fixes). Use sparingly; never higher — if a user can observe it, it belongs on Pain or Joy instead.
+
+   ### Outcome signals
+
+   - **Up** on Pain when the PR fixes a crash / hang / data-loss / security issue users actually hit, resolves a (repeatedly-)reported community issue, or removes a documented footgun. User-facing docs that prevent a silent hang count as real Pain relief even though they are ★ to review.
+   - **Up** on Joy when the PR ships a capability users asked for, removes a long-standing limitation, or unlocks a workflow that was impossible before.
+   - **Down** to Impact ★ for internal refactors, test-only changes, CI/build, generated-file regeneration, or dependency bumps with no behavior change — regardless of size.
+   - Judge for the product's *users*, not its maintainers. When in doubt between two adjacent ratings, pick the **lower** one — over-claiming outcome is noisier than under-claiming (the opposite bias from review effort, where you round up).
+   - Cap at ★★★★★, never below ★ (Impact caps at ★★).
 
 5. Generate the TLDR block in this exact format (plain text, no markdown):
 
    ```text
    https://github.com/owner/repo/pull/123 -- PR title as-is
    Scope: +N/-M lines, K files, C commits
-   Review effort: ★★★☆☆ (medium) | User value: ★★★★☆ (high)
+   Review effort: ★★★☆☆ (medium) | Pain relieved: ★★★★☆ (oxycodone)
    TLDR: one sentence explaining WHY this PR exists (motivation, not technical details). Written in the resolved language.
    ```
 
@@ -94,10 +116,18 @@ If no PR references provided, look in the conversation context for recently ment
 
    - Put the scope on its own line and the two ratings on the next line — keeps each line short and scannable in Slack.
    - Always render the scope as `+<additions>/-<deletions> lines, <files> files, <commits> commits` even when one of the numbers is 0 — the consistent shape is easier to scan in Slack.
-   - On the ratings line render `Review effort: <stars> (<word>) | User value: <stars> (<word>)`. Review-effort words are `(trivial)`, `(small)`, `(medium)`, `(large)`, `(huge)`; user-value words are `(none)`, `(minor)`, `(moderate)`, `(high)`, `(critical)`.
+   - On the ratings line render `Review effort: <stars> (<word>) | <outcome-axis>: <stars> (<word>)`, where `<outcome-axis>` is exactly one of `Pain relieved`, `Joy`, or `Impact` per the axis picked in step 4. Review-effort words are `(trivial)`, `(small)`, `(medium)`, `(large)`, `(huge)`; Pain-relieved words are `(aspirin)`, `(ibuprofen)`, `(codeine)`, `(oxycodone)`, `(morphine)`; Joy words are `(negligible)`, `(nice)`, `(useful)`, `(wanted)`, `(delight)`; Impact words are `(internal)`, `(internal+)`.
    - Always include the literal-word bucket in parentheses after each star group — the stars communicate at a glance; the word is for screen-reader and search-friendliness.
    - The stars and words are in English regardless of `--lang`; only the TLDR sentence follows `--lang`, and the scope counts are locale-neutral.
-   - The two axes are independent: a one-line fix can be `★☆☆☆☆ (trivial)` to review yet `★★★★★ (critical)` for users, and a huge refactor the reverse. Rate each on its own merits, never copy one onto the other.
+   - The two axes are independent: a one-line `fix` can be `★☆☆☆☆ (trivial)` to review yet `★★★★★ (morphine)` Pain relieved, and a huge `refactor` can be `★★★★☆ (large)` to review yet `★☆☆☆☆ (internal)` Impact. Rate each on its own merits, never copy one onto the other.
+
+   Example ratings lines, one per outcome axis:
+
+   ```text
+   Review effort: ★☆☆☆☆ (trivial) | Pain relieved: ★★★★★ (morphine)
+   Review effort: ★★★☆☆ (medium) | Joy: ★★★☆☆ (useful)
+   Review effort: ★★★★☆ (large) | Impact: ★☆☆☆☆ (internal)
+   ```
 
 ## Output
 
