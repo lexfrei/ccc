@@ -70,6 +70,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode per route kind; applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only — no git operations |
 | **pore-analysis** | Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi, radial g(r) + orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes — no hardcoded autodetect |
 | **cleanup** | Local disk cleanup: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders), Go caches, and Homebrew — each report → confirm → execute with interactive prompts, plus a `cleanup-all` pipeline. Paths are asked, never hardcoded |
+| **hermes-tweet** | Guide Hermes Agent X/Twitter research, monitoring, and approval-gated action planning through Hermes Tweet |
 
 ### MCP Servers
 

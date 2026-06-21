@@ -1,0 +1,9 @@
+{
+  "name": "hermes-tweet",
+  "version": "0.1.6",
+  "description": "Guide Hermes Agent X/Twitter research, monitoring, and approval-gated action planning through Hermes Tweet.",
+  "author": {
+    "name": "Xquik",
+    "url": "https://github.com/Xquik-dev"
+  }
+}

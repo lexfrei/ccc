@@ -202,6 +202,13 @@
       "description": "Local disk cleanup utilities: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders), Go caches, and Homebrew — each runs report → confirm → execute with interactive prompts, plus one orchestrating pipeline",
       "source": "./skills/cleanup",
       "category": "productivity"
+    },
+    {
+      "name": "hermes-tweet",
+      "description": "Guide Hermes Agent X/Twitter research, monitoring, and approval-gated action planning through Hermes Tweet",
+      "source": "./skills/hermes-tweet",
+      "category": "productivity",
+      "homepage": "https://github.com/Xquik-dev/hermes-tweet"
     }
   ]
 }
