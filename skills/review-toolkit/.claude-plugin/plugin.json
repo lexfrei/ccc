@@ -1,7 +1,7 @@
 {
   "name": "review-toolkit",
-  "version": "2.0.0",
-  "description": "Comprehensive PR review pipeline: branch-level analysis, sequential Claude+Codex dual-model review with evidence-based verification, and opt-in GitHub PR review publishing under a five-frame substance framework. Reviews land on an LGTM or NOT LGTM verdict — never observation-only.",
+  "version": "2.1.0",
+  "description": "Comprehensive PR review pipeline: branch-level analysis, sequential Claude+Codex dual-model review with evidence-based verification, and opt-in GitHub PR review publishing under a five-frame substance framework. Enforces two mandatory gates — full test coverage in tested areas and no regressions to previously-working behavior. Reviews land on an LGTM or NOT LGTM verdict — never observation-only.",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"

@@ -69,7 +69,7 @@
     },
     {
       "name": "review-toolkit",
-      "description": "Comprehensive code review pipeline: branch review, PR final review with dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification",
+      "description": "Comprehensive PR review pipeline: branch-level analysis, sequential Claude+Codex dual-model review with evidence-based verification, and opt-in GitHub PR review publishing under a five-frame substance framework. Enforces two mandatory gates — full test coverage in tested areas and no regressions to previously-working behavior. Reviews land on an LGTM or NOT LGTM verdict — never observation-only.",
       "source": "./skills/review-toolkit",
       "category": "productivity"
     },
