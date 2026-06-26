@@ -71,7 +71,7 @@ Before any code reading, frame WHY this PR exists. Read in this order:
    - GitHub shorthand (`#123`): `gh issue view 123` in the current repo
    - Other ID: ask the user for the full URL
 
-Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary will appear in the published review under `**Business context**:`.
+Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary will appear in the published review under `**Business context**:`. It is stated in full only in the **first** review this skill publishes on the PR; on any later publish it is omitted when unchanged, or shown as a delta against the previously recorded context when it changed — never restated in full (see Step 9b.5).
 
 If `--ticket` was provided, also extract:
 
@@ -252,7 +252,7 @@ Output structure:
 ```text
 <LGTM | NOT LGTM> — <one-sentence why>
 
-**Business context**: <one sentence from Step 2>
+**Business context**: <one sentence from Step 2 — first publish only. On a later publish, omit this line if the context is unchanged, or replace it with `**Business context update**: <delta> (previously: <prior sentence>)` if it changed. See Step 9b.5>
 
 <If blockers exist:>
 ## Blockers
@@ -335,6 +335,18 @@ Multiple reviews from the same user clutter the timeline. If an active review wi
 EXISTING_REVIEW_ID=$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login == \"$(gh api user --jq .login)\") | select(.state != \"DISMISSED\")] | last | .id // empty")
 ```
+
+### 9b.5 Business context continuity
+
+The business context (the WHY from Step 2) is stated in full **once** — in the first review this skill publishes on the PR. On every later publish, reconcile against what was already posted:
+
+1. Read the body of the most recent non-dismissed review by the current user (the one found in 9b, if any) and extract its `**Business context**:` or `**Business context update**:` line — this is the *previously recorded context*.
+2. Decide how this publish renders the context:
+   - **No prior context recorded** → include the full `**Business context**: <sentence>` line.
+   - **Unchanged from the prior** → when updating that same review in place, keep the existing full line (it is the canonical home); when posting a NEW review, omit the line entirely (it is already stated upstream in the timeline).
+   - **Changed from the prior** → replace it with `**Business context update**: <what changed> (previously: <prior sentence>)`. Never silently swap in a fresh full sentence — always show the delta against the recorded context.
+
+This keeps the WHY from being repeated verbatim across re-runs while still surfacing a genuine change in framing.
 
 ### 9c. Update or create
 
