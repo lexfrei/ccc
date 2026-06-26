@@ -138,11 +138,12 @@ Review the diff for:
 - Error handling gaps
 - Code clarity and maintainability
 - Naming and structure
-- Tests coverage (if applicable)
+- Test coverage: if the area being changed already has tests, new or changed code MUST come with tests, and those tests must define the full contract — valid use AND rejected/invalid use (error paths, boundaries, invalid inputs) — so they read as executable documentation of what is allowed and what is not. Happy-path-only tests in a tested area do not satisfy this and block (NOT LGTM). If the area has no tests at all, recommend adding them but do not block on that alone
 - Where issues are found: suggest specific tests that would prove/demonstrate the problem exists (e.g. "a test that calls X with empty input would expose this nil pointer")
 - Adjacent issues: if you find a problem, look at the surrounding code in the same area. If there are related issues nearby that are worth fixing in the same PR, flag them (not a full codebase audit — just the neighborhood of the changes)
 - No "pre-existing" excuse: if a problem is mentioned in the review, it IS the review's problem. There is no such thing as "pre-existing issue, out of scope." If you see it, if it affects the code being changed, if it's in the neighborhood of the diff — it blocks. The PR touched this area, the PR owns fixing it. Do not dismiss issues as "already existed before this PR"
 - Comments as fixes: if a change "addresses" a problem by adding a comment (TODO, FIXME, HACK, explanatory note, warning comment) instead of actually fixing the code — this is NOT a fix. Flag it explicitly: a comment documents a known problem but does not solve it. Nobody reads comments in the heat of the moment, and the problem will bite someone eventually. The actual code must be changed. This is always a blocking issue (NOT LGTM)
+- No regression from laziness: any behavior that worked before this change and stops working is a blocking issue (NOT LGTM). "Affects only a minority of users", "edge case", "rare config", "deprecated anyway" are NOT acceptable justifications — a path used by few is still a path that worked. Check all config variants, defaults, and flags, not just the common path. The only allowed break is an intentional breaking change the PR explicitly declares with a migration path; surface it in the review, never let it pass silently
 - Documentation accuracy: if the project has ANY documentation (README, DESIGN.md, docs/, inline doc comments, Helm values descriptions, CLAUDE.md, etc.), it MUST be verified against the actual code — regardless of whether the PR touches documentation or not. Stale, misleading, or contradictory documentation is a blocking issue. Specifically check: documented APIs/flags/config match the implementation, examples actually work with the current code, no references to removed or renamed entities, version numbers and defaults match reality. If the PR changes behavior but existing documentation still describes the old behavior — blocking. If existing documentation was already wrong before this PR but describes the area being changed — also blocking (the PR touched this area, the PR owns fixing the docs)
 
 <if --ticket>
@@ -175,7 +176,7 @@ Start your review with one of:
 - **LGTM** — code is correct, safe, clear, and well-tested. May have minor cosmetic notes (listed as recommendations, not blockers)
 - **NOT LGTM** — there are issues that must be addressed before merging
 
-LGTM is a high bar. It means: no bugs, no security issues, no missing error handling, no logic gaps, no untested paths. The ONLY things allowed to pass with LGTM are cosmetic issues (naming style, minor formatting) — and even those must be listed as "Recommended to fix" in the review. Everything else blocks. When in doubt, do not LGTM.
+LGTM is a high bar. It means: no bugs, no security issues, no missing error handling, no logic gaps, no untested paths, no regressions to previously-working behavior. The ONLY things allowed to pass with LGTM are cosmetic issues (naming style, minor formatting) — and even those must be listed as "Recommended to fix" in the review. Everything else blocks. When in doubt, do not LGTM.
 
 Then provide the review as free-form text, like a human reviewer would write.
 
@@ -191,3 +192,7 @@ End every review with this reminder (verbatim):
 > **Reminder:** "Pre-existing" is not a thing. If a problem is flagged in this review, it must be fixed in this PR — no exceptions.
 >
 > **Every issue listed above must have a corresponding test.** No matter the severity — bug, logic error, security issue, error handling gap, documentation drift — each one must be covered by a test that fails without the fix and passes with it. Untested fixes are not fixes.
+>
+> **Tests are the second source of truth.** In an area that already has tests, new functionality must be covered in full — valid use AND rejected/invalid use — so the tests document what is allowed and what is not, not just the happy path.
+>
+> **What worked must keep working.** A regression is a blocker regardless of how few users it touches; only an explicitly declared, migration-documented breaking change may pass.

@@ -71,7 +71,7 @@ Before any code reading, frame WHY this PR exists. Read in this order:
    - GitHub shorthand (`#123`): `gh issue view 123` in the current repo
    - Other ID: ask the user for the full URL
 
-Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary will appear in the published review under `**Business context**:`.
+Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary will appear in the published review under `**Business context**:`. It is stated in full only in the **first** review this skill publishes on the PR; on any later publish it is omitted when unchanged, or shown as a delta against the previously recorded context when it changed — never restated in full (see Step 9b.5).
 
 If `--ticket` was provided, also extract:
 
@@ -147,6 +147,7 @@ Examine for:
 - **Resource leaks**: unclosed files/connections/channels, missing defer/finally, context cancellation not propagated
 - **Naming and abstractions**: misleading names, wrong abstraction level, leaky abstractions, god functions
 - **API contracts**: breaking changes to public interfaces, missing input validation, undocumented behavior changes
+- **Regressions**: behavior that worked before this change and is now altered or removed — check ALL config variants, defaults, and flags, not just the common path. A narrow blast radius is not a reason to skip this; a path used by few is still a path that worked
 - **Security**: injection (SQL, command, template), auth bypass, secrets in code, unsafe deserialization, path traversal
 - **Data integrity**: missing transactions, partial writes, inconsistent state on failure, TOCTOU races
 - **Documentation drift**: behavior changes not reflected in existing docs
@@ -214,6 +215,8 @@ The PR MUST NOT merge with any of these present:
 - Data loss or corruption risks
 - Broken API contracts (existing consumers will break)
 - Broken variants/environments (works in variant A but breaks variant B)
+- **Tests gate** — the changed area already has tests, but new or changed code ships without tests, or with happy-path-only tests that never exercise rejected/invalid/boundary behavior. Tests in a tested area must define the full contract — what is allowed AND what is rejected — so they read as executable documentation. Shallow or absent tests where a test convention already exists = NOT LGTM, never an action item.
+- **No-regression gate** — any behavior that worked before this PR and no longer works, across every config variant, default, and flag, not just the common path. "Affects few users", "edge case", "rare config", "deprecated anyway" are NOT valid reasons to accept a regression. The only non-blocking path is an intentional breaking change the PR explicitly declares with a migration note — and even then it is surfaced in the verdict, never passed silently.
 - Missing error handling that causes silent failures
 - Resource leaks under normal operation (not just edge cases)
 - Behavior changes with stale documentation in the area being changed
@@ -225,7 +228,7 @@ The PR MUST NOT merge with any of these present:
 Real concerns worth surfacing but not blocking this merge:
 
 - Tech debt introduced (acceptable now, follow-up worth tracking)
-- Missing test coverage on non-critical paths
+- Adding tests to an area that has NO existing test convention (recommend, do not block — the tests gate above applies only where tests already exist)
 - Naming or abstraction improvements
 - Performance concerns that are not urgent
 - Internal-only documentation gaps
@@ -249,7 +252,7 @@ Output structure:
 ```text
 <LGTM | NOT LGTM> — <one-sentence why>
 
-**Business context**: <one sentence from Step 2>
+**Business context**: <one sentence from Step 2 — first publish only. On a later publish, omit this line if the context is unchanged, or replace it with `**Business context update**: <delta> (previously: <prior sentence>)` if it changed. See Step 9b.5>
 
 <If blockers exist:>
 ## Blockers
@@ -333,6 +336,18 @@ EXISTING_REVIEW_ID=$(gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" \
   --jq "[.[] | select(.user.login == \"$(gh api user --jq .login)\") | select(.state != \"DISMISSED\")] | last | .id // empty")
 ```
 
+### 9b.5 Business context continuity
+
+The business context (the WHY from Step 2) is stated in full **once** — in the first review this skill publishes on the PR. On every later publish, reconcile against what was already posted:
+
+1. Read the body of the most recent non-dismissed review by the current user (the one found in 9b, if any) and extract its `**Business context**:` or `**Business context update**:` line — this is the *previously recorded context*.
+2. Decide how this publish renders the context:
+   - **No prior context recorded** → include the full `**Business context**: <sentence>` line.
+   - **Unchanged from the prior** → when updating that same review in place, keep the existing full line (it is the canonical home); when posting a NEW review, omit the line entirely (it is already stated upstream in the timeline).
+   - **Changed from the prior** → replace it with `**Business context update**: <what changed> (previously: <prior sentence>)`. Never silently swap in a fresh full sentence — always show the delta against the recorded context.
+
+This keeps the WHY from being repeated verbatim across re-runs while still surfacing a genuine change in framing.
+
 ### 9c. Update or create
 
 If updating:
@@ -374,6 +389,8 @@ After publishing or updating, print the review URL so the user can verify it ren
 - **Publish is opt-in**: nothing is sent to GitHub unless the invocation included `--publish` AND the user approved the draft in Step 8. The default mode is local draft only.
 - **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body, and the corresponding API event is APPROVE or REQUEST_CHANGES. COMMENT is forbidden by default (unless the user explicitly asked for comment-only).
 - **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
+- **Tests gate (mandatory)**: in any area that already has tests, changed or new code ships with tests, and those tests must cover the full contract — valid use AND rejected/invalid use — not just the happy path. Shallow or absent tests in a tested area = NOT LGTM. (An area with no existing tests gets a recommendation, not a block.)
+- **No-regression gate (mandatory)**: what worked must keep working. A small blast radius is never a license to break it — "few users", "edge case", "rare config" are not acceptable justifications. Only an explicitly declared, migration-documented breaking change may pass, and it is surfaced in the verdict, never silent.
 - **No speculation**: every finding must have an `**Evidence**:` line. Without evidence, drop.
 - **No-docs-found ≠ docs-OK**: open the relevant existing user-facing doc page and read it before declaring docs in sync.
 - **Pre-existing in cross-repo docs**: file a tracking issue (after user approval), reference it under non-blocking follow-ups, do not block.
