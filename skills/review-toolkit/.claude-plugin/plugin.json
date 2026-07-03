@@ -1,7 +1,7 @@
 {
   "name": "review-toolkit",
-  "version": "2.1.0",
-  "description": "Comprehensive PR review pipeline: branch-level analysis, sequential Claude+Codex dual-model review with evidence-based verification, and opt-in GitHub PR review publishing under a five-frame substance framework. Enforces two mandatory gates — full test coverage in tested areas and no regressions to previously-working behavior. Reviews land on an LGTM or NOT LGTM verdict — never observation-only.",
+  "version": "2.2.0",
+  "description": "Comprehensive PR review pipeline: a pre-review readiness gate (stops on merge conflicts or red code-related CI with a fix-it note, no verdict), branch-level analysis, sequential Claude+Codex dual-model review with evidence-based verification, and opt-in GitHub PR review publishing under a five-frame substance framework. A value/design gate weighs whether the change should exist at all — value versus permanent maintenance cost, right layer, root cause in-repo versus upstream — and can block a PR even when the code is flawless. Enforces full test coverage in tested areas and no regressions to previously-working behavior. Reviews land on an LGTM or NOT LGTM verdict; the only no-verdict path is the readiness gate's fix-CI / fix-conflicts note.",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
