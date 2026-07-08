@@ -1,10 +1,10 @@
 ---
 name: tldrpr
 description: Generate plain-text TLDR for PRs (for Slack, copied to clipboard). Each entry includes change scope (+N/-M lines, K files), a 1-5 star review-effort rating (time to review) and a 1-5 star outcome rating whose axis depends on the change — Pain relieved for fixes, Joy for features, Impact for internal work — so the reader can both budget time and prioritise before opening the PR.
-argument-hint: "<pr-url-or-ref> [pr-url-or-ref] ... [--lang <language>]"
+argument-hint: "<pr-url-or-ref> [pr-url-or-ref] ... [--lang <language>] [--no-copy]"
 ---
 
-Generate a plain-text TLDR summary of one or more Pull Requests for pasting into Slack. No markdown formatting — just plain text. Result is copied to clipboard.
+Generate a plain-text TLDR summary of one or more Pull Requests for pasting into Slack. No markdown formatting — just plain text. Result is copied to clipboard by default; pass `--no-copy` to print the text only and leave the clipboard untouched (useful when another tool consumes the output).
 
 ## Arguments
 
@@ -14,6 +14,7 @@ Parse `$ARGUMENTS` for:
   - Full URL: `https://github.com/owner/repo/pull/123`
   - Short ref: `owner/repo#123`
 - `--lang <language>` — language for the TLDR line (e.g. `en`, `ru`, `de`). If omitted, use the same language the user communicates in during this conversation.
+- `--no-copy` — do not copy the result to the clipboard; print the text only. Default (flag absent) copies to clipboard as before.
 
 If no PR references provided, look in the conversation context for recently mentioned PR URLs or refs.
 
@@ -132,7 +133,8 @@ If no PR references provided, look in the conversation context for recently ment
 ## Output
 
 - If multiple PRs: separate each block with an empty line.
-- After generating all TLDRs, copy the complete text to clipboard:
+- If `--no-copy` is set: print the complete text only, skip every clipboard step, and confirm with "Done" — do not attempt `pbcopy`/`wl-copy`/`xclip` and do not print a clipboard-failure note.
+- Otherwise, after generating all TLDRs, copy the complete text to clipboard:
   - macOS: pipe to `pbcopy`
   - Linux (Wayland): pipe to `wl-copy`
   - Linux (X11): pipe to `xclip -selection clipboard` or `xsel --clipboard --input`
