@@ -40,52 +40,53 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 
 | Plugin | Description |
 | --- | --- |
-| **task-orchestrator** | Project analysis and planning — decomposes complex tasks, creates implementation plans, identifies risks |
-| **tech-oracle** | Technical architect — manages .architecture.yaml, creates ADRs, evaluates technology choices |
-| **gopher-builder** | Go developer — TDD specialist for cloud-native apps with Echo, slog, cockroachdb/errors |
-| **snake-charmer** | Python developer — TDD specialist treating code as art, with FastAPI, Pydantic, structlog |
-| **templ-weaver** | Frontend specialist — Go Templ + HTMX with server-first rendering and WCAG 2.1 AA accessibility |
-| **kube-pilot** | Kubernetes specialist — secure, production-ready K8s manifests and ArgoCD with zero-trust networking |
-| **chart-builder** | Helm chart TDD specialist — production-ready charts with helm-unittest |
-| **docker-smith** | Containerization specialist — optimized, secure Containerfiles with multi-stage builds |
-| **code-guardian** | Code quality validation — linters, tests, security checks, .architecture.yaml compliance |
-| **doc-curator** | AI artifact cleanup — removes AI-generated comments, excessive docs, non-professional patterns |
+| **task-orchestrator** | Project analysis and planning - decomposes complex tasks, creates implementation plans, identifies risks |
+| **tech-oracle** | Technical architect - manages .architecture.yaml, creates ADRs, evaluates technology choices |
+| **gopher-builder** | Go developer - TDD specialist for cloud-native apps with Echo, slog, cockroachdb/errors |
+| **snake-charmer** | Python developer - TDD specialist treating code as art, with FastAPI, Pydantic, structlog |
+| **templ-weaver** | Frontend specialist - Go Templ + HTMX with server-first rendering and WCAG 2.1 AA accessibility |
+| **kube-pilot** | Kubernetes specialist - secure, production-ready K8s manifests and ArgoCD with zero-trust networking |
+| **chart-builder** | Helm chart TDD specialist - production-ready charts with helm-unittest |
+| **docker-smith** | Containerization specialist - optimized, secure Containerfiles with multi-stage builds |
+| **code-guardian** | Code quality validation - linters, tests, security checks, .architecture.yaml compliance |
+| **doc-curator** | AI artifact cleanup - removes AI-generated comments, excessive docs, non-professional patterns |
 
 ### Skills
 
 | Plugin | Description |
 | --- | --- |
-| **review-toolkit** | Code review pipeline: branch review, PR review with a readiness gate (fix-CI / fix-conflicts, no verdict), a value/design gate (should this change exist at all — value vs maintenance cost), dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification |
-| **address-pr-comments** | Close out unresolved review comments across one or more PRs — verify, fix with auto-pushed signed commits (one per thread), post user-approved replies, restore original branch |
+| **review-toolkit** | Code review pipeline: branch review, PR review with a readiness gate (fix-CI / fix-conflicts, no verdict), a value/design gate (should this change exist at all - value vs maintenance cost), dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification |
+| **address-pr-comments** | Close out unresolved review comments across one or more PRs - verify, fix with auto-pushed signed commits (one per thread), post user-approved replies, restore original branch |
 | **git-tools** | Git workflow utilities: fork refresh and repo setup with branch protection |
 | **genname** | Generate a `/rename` command from type, title, and optional PR number |
 | **tldrpr** | Generate plain-text TLDR summaries for PRs, ready for Slack |
 | **learn** | Analyze the current session and extract key learnings into CLAUDE.md and memory |
 | **renovate-check** | Run Renovate locally in dry-run mode, research migration guides, apply selected updates |
+| **xquik-x-data** | Xquik X data API, MCP endpoint, SDKs, and webhooks for Claude Code |
 | **agent-father** | Interactive guide for creating Claude Code subagents following official documentation standards |
-| **billy** | "Where's the proof, Billy?" — stop and prove a claim with deep investigation |
+| **billy** | "Where's the proof, Billy?" - stop and prove a claim with deep investigation |
 | **m4b-audiobook** | Assemble m4b audiobook from audio files with chapters, metadata, and cover art |
 | **say** | Speak text aloud using macOS TTS with automatic voice selection |
 | **slack-formatter** | Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved |
-| **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode per route kind; applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only — no git operations |
-| **pore-analysis** | Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi, radial g(r) + orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes — no hardcoded autodetect |
-| **cleanup** | Local disk cleanup: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders), Go caches, and Homebrew — each report → confirm → execute with interactive prompts, plus a `cleanup-all` pipeline. Paths are asked, never hardcoded |
+| **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode per route kind; applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only - no git operations |
+| **pore-analysis** | Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi, radial g(r) + orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes - no hardcoded autodetect |
+| **cleanup** | Local disk cleanup: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders), Go caches, and Homebrew - each report → confirm → execute with interactive prompts, plus a `cleanup-all` pipeline. Paths are asked, never hardcoded |
 
 ### MCP Servers
 
 | Plugin | Description |
 | --- | --- |
-| **mcp-loki** | [Grafana Loki](https://github.com/lexfrei/mcp-loki) — LogQL queries, label discovery, series exploration, index statistics |
-| **mcp-transmission** | [Transmission](https://github.com/lexfrei/mcp-transmission) — torrent management, session stats, queue and bandwidth control |
-| **mcp-tg** | [Telegram](https://github.com/lexfrei/mcp-tg) — MTProto client API, messaging, contacts, groups, channels, media handling |
+| **mcp-loki** | [Grafana Loki](https://github.com/lexfrei/mcp-loki) - LogQL queries, label discovery, series exploration, index statistics |
+| **mcp-transmission** | [Transmission](https://github.com/lexfrei/mcp-transmission) - torrent management, session stats, queue and bandwidth control |
+| **mcp-tg** | [Telegram](https://github.com/lexfrei/mcp-tg) - MTProto client API, messaging, contacts, groups, channels, media handling |
 
 ### Hooks
 
 | Plugin | Description |
 | --- | --- |
 | **golangci-lint** | Auto-run golangci-lint on package when Go files are edited |
-| **md-no-hardwrap** | PreToolUse hook: reject `Write`/`Edit` on markdown files when a paragraph spans more than one line — enforces "one continuous line per paragraph" so renderers wrap to viewer width instead of fighting hardwraps in the source |
-| **worksync** | Daily work-sync markdown log — PostToolUse hook captures `gh pr/issue create/merge/close` automatically, companion skill logs research/ops/checkpoint events (prompts for vault path on install, works with Obsidian, Logseq, or plain markdown) |
+| **md-no-hardwrap** | PreToolUse hook: reject `Write`/`Edit` on markdown files when a paragraph spans more than one line - enforces "one continuous line per paragraph" so renderers wrap to viewer width instead of fighting hardwraps in the source |
+| **worksync** | Daily work-sync markdown log - PostToolUse hook captures `gh pr/issue create/merge/close` automatically, companion skill logs research/ops/checkpoint events (prompts for vault path on install, works with Obsidian, Logseq, or plain markdown) |
 
 ## License
 
