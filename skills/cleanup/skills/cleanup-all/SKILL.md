@@ -22,7 +22,7 @@ Run each by following the corresponding sibling skill in this plugin. Each sibli
 
 1. **worktrees** → `worktree-sweep` on the resolved scan root (all-repos scope). Remove safe worktrees; triage dirty ones.
 2. **forks** → `stale-forks` on the resolved scan root. Remove dead/reclonable local clones; the sibling asks per-fork about deleting the GitHub fork.
-3. **docker** → `docker-prune`. The sibling asks which scopes (images/cache, volumes, non-default buildx builders).
+3. **docker** → `docker-prune`. The sibling asks which scopes (images/cache, volumes, non-default buildx builders, VM disk trim on VM-backed daemons).
 4. **go** → `go-cache`. The sibling asks whether to include the module cache.
 5. **brew** → `brew-cleanup`. The sibling asks which scopes (cleanup, autoremove, full cache scrub).
 
