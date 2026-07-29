@@ -1,7 +1,7 @@
 ---
 name: branch-review
-description: Review current branch changes in isolation. Output starts with LGTM verdict — if no LGTM, the code is not ready to merge. IMPORTANT — always pass all flags you already know from context (target branch, project type, ticket, etc.). Do not rely on auto-detection when the answer is known. Pass --target to set which branch the changes are going INTO. Pass --ticket with a URL or ID to validate against requirements.
-argument-hint: "[path] [--target branch] [--nitpick] [--type go|node|python|rust] [--exclude pattern,pattern] [--ticket URL|ID]"
+description: Review current branch changes in isolation. Output starts with LGTM verdict — if no LGTM, the code is not ready to merge. The verdict is decided ONLY by defects the diff introduced, worsened, or interacts with (merge-base attribution, computed from git); pre-existing defects are reported in full in a separate "Found outside this diff" section and never block. LGTM is compatible with a non-empty recommendations list. IMPORTANT — always pass all flags you already know from context (target branch, project type, ticket, round-1 head, etc.). Do not rely on auto-detection when the answer is known. Pass --target to set which branch the changes are going INTO. Pass --ticket with a URL or ID to validate against requirements. On re-review rounds pass --round1-head with the SHA from round 1's printed review header to enable churn diagnostics.
+argument-hint: "[path] [--target branch] [--nitpick] [--type go|node|python|rust] [--exclude pattern,pattern] [--ticket URL|ID] [--round1-head sha]"
 context: fork
 agent: general-purpose
 ---
@@ -31,6 +31,7 @@ Parse $ARGUMENTS for:
 - `--type` project type (e.g. `go`, `node`, `python`, `rust`) — skips auto-detection
 - `--exclude` additional exclude patterns, comma-separated (e.g. `docs/,*.gen.go`)
 - `--ticket` ticket reference — URL (GitHub issue, Jira, Linear, Notion, etc.) or ID (e.g. `#123`, `PROJ-456`). When provided, the review includes a **Ticket Compliance** section that validates whether the changes fulfil the ticket requirements
+- `--round1-head` the head SHA the FIRST review round of this gate ran on — copy it from that round's output header (the `Reviewed <branch> at <sha>` line). Used only to compute finding-origin labels (feature vs churn, see "Finding origin and the churn mark"); it never affects severity or the verdict, so it is an auditable record of a past run, not a scope declaration. Omit on the first round
 
 Examples:
 
@@ -43,6 +44,7 @@ Examples:
 - `/review-branch --ticket PROJ-456` → validate against ticket ID (fetched via appropriate tool)
 - `/review-branch ~/worktrees/feature --target develop --nitpick --type node` → all combined
 - `/review-branch --target main --ticket #123 --nitpick` → target main, validate against ticket, pedantic mode
+- `/review-branch --target main --round1-head 1a2b3c4` → re-review round with churn diagnostics
 
 ## Setup
 
@@ -68,19 +70,20 @@ Determine target branch (the branch this PR is merging INTO):
 4. If no tracking branch: try `main`, fallback to `master`
 5. If neither exists: report error and stop
 
-**Print the resolved target branch** so the user can verify it is correct (e.g. "Reviewing against target branch: `next`").
-
 **Decide whether a worktree is needed.** Compare `REVIEW_BRANCH` to the branch being reviewed:
 
 - If a path argument was provided: trust it, no worktree.
 - Else if `REVIEW_BRANCH` matches the branch to review: analyze in place, no worktree.
 - Else (active branch is different — typical when cascaded from `/pr-review`): create a worktree at the branch to review per the worktree block in the CRITICAL section above. From this point on, `<path>` refers to that worktree path. Cleanup runs via the `trap` on exit.
 
-Find the merge base (the point where the branch being reviewed diverged from the target):
+Find the merge base (the point where the branch being reviewed diverged from the target) and record the head being reviewed:
 
 ```bash
 MERGE_BASE=$(git -C <path> merge-base $REVIEW_BRANCH <target-branch>)
+REVIEW_HEAD=$(git -C <path> rev-parse HEAD)
 ```
+
+**Print the review header** so the user can verify the scope: `Reviewing <REVIEW_BRANCH> at <REVIEW_HEAD> against <target-branch>` (short SHA is fine). The output header restates the same SHA as `Reviewed <REVIEW_BRANCH> at <REVIEW_HEAD>` — that output line is the auditable record `--round1-head` refers to on later rounds, so the round-1 ref can always be recovered from the round-1 review output.
 
 ## Loading the ticket
 
@@ -139,12 +142,62 @@ Review the diff for:
 - Code clarity and maintainability
 - Naming and structure
 - Test coverage: if the area being changed already has tests, new or changed code MUST come with tests, and those tests must define the full contract — valid use AND rejected/invalid use (error paths, boundaries, invalid inputs) — so they read as executable documentation of what is allowed and what is not. Happy-path-only tests in a tested area do not satisfy this and block (NOT LGTM). If the area has no tests at all, recommend adding them but do not block on that alone
-- Where issues are found: suggest specific tests that would prove/demonstrate the problem exists (e.g. "a test that calls X with empty input would expose this nil pointer")
-- Adjacent issues: if you find a problem, look at the surrounding code in the same area. If there are related issues nearby that are worth fixing in the same PR, flag them (not a full codebase audit — just the neighborhood of the changes)
-- No "pre-existing" excuse: if a problem is mentioned in the review, it IS the review's problem. There is no such thing as "pre-existing issue, out of scope." If you see it, if it affects the code being changed, if it's in the neighborhood of the diff — it blocks. The PR touched this area, the PR owns fixing it. Do not dismiss issues as "already existed before this PR"
+- Where a code defect is found: suggest a specific test in the existing test surface that would demonstrate the problem (e.g. "a test that calls X with empty input would expose this nil pointer")
+- Adjacent issues: if you find a problem, look at the surrounding code in the same area — related issues nearby are worth surfacing (not a full codebase audit, just the vicinity of the changes). Report everything you find; attribution (below) decides which section each finding lands in
 - Comments as fixes: if a change "addresses" a problem by adding a comment (TODO, FIXME, HACK, explanatory note, warning comment) instead of actually fixing the code — this is NOT a fix. Flag it explicitly: a comment documents a known problem but does not solve it. Nobody reads comments in the heat of the moment, and the problem will bite someone eventually. The actual code must be changed. This is always a blocking issue (NOT LGTM)
 - No regression from laziness: any behavior that worked before this change and stops working is a blocking issue (NOT LGTM). "Affects only a minority of users", "edge case", "rare config", "deprecated anyway" are NOT acceptable justifications — a path used by few is still a path that worked. Check all config variants, defaults, and flags, not just the common path. The only allowed break is an intentional breaking change the PR explicitly declares with a migration path; surface it in the review, never let it pass silently
-- Documentation accuracy: if the project has ANY documentation (README, DESIGN.md, docs/, inline doc comments, Helm values descriptions, CLAUDE.md, etc.), it MUST be verified against the actual code — regardless of whether the PR touches documentation or not. Stale, misleading, or contradictory documentation is a blocking issue. Specifically check: documented APIs/flags/config match the implementation, examples actually work with the current code, no references to removed or renamed entities, version numbers and defaults match reality. If the PR changes behavior but existing documentation still describes the old behavior — blocking. If existing documentation was already wrong before this PR but describes the area being changed — also blocking (the PR touched this area, the PR owns fixing the docs)
+- Documentation accuracy: if the diff changes behavior, existing documentation (README, DESIGN.md, docs/, inline doc comments, Helm values descriptions, CLAUDE.md, etc.) that still describes the old behavior is a verdict finding and blocks — as are examples the diff broke and references to entities the diff removed or renamed. Documentation that was already wrong at the merge base goes to "Found outside this diff" with severity, per attribution below
+
+## Finding attribution
+
+Every finding — from the diff or from the surrounding code — gets one mechanical question, answered from git, not from anyone's claim: **does this defect exist at the merge base?** Check with `git show $MERGE_BASE:<file>` and `git -C <path> blame`.
+
+- Absent at merge base, present at head → the diff introduced it. **Verdict finding, blocks.**
+- Worked at merge base, broken at head → regression. **Verdict finding, blocks** (same test, reversed).
+- Already present at merge base, and the diff does not change its behavior → pre-existing. **Reported in full in "Found outside this diff"** with severity — routed out of the verdict, never dropped.
+- Present at merge base, but the diff **interacts** with it — worsens it, hides it, builds on it, or deletes a mitigation that made it harmless → the state at head differs from the state at base, so the same test catches it. **Verdict finding, blocks.** Example: a guide installed a legacy tool long before the PR (pre-existing, routed out), but the PR deleted the compatibility tip that made that install work (interaction, blocks).
+
+The PR owns what it changed and what its changes interact with — nothing more. There is no "the PR touched this area, so the PR owns the area". Attribution is computed by the reviewer from git; the authoring session has no channel to influence it.
+
+## Remedy proportionality
+
+The remedy lives in the same layer as the defect:
+
+- **Changed logic in code**: a test in the **existing** test surface, per the test-coverage criterion above. Absent test blocks.
+- **Fixed wording in docs or comments**: the fix is the deliverable. No test demanded.
+- **Never propose a new checker, linter rule, CI job, or guard script as the required remedy for a finding.** If the existing test surface cannot express the check, "not machine-checkable here" is a complete answer. A new guard may be suggested only in "Found outside this diff" as its own future work — never as a condition for this PR's verdict.
+
+## Finding origin and the churn mark
+
+A review gate is a control loop. While findings come from the feature, the loop converges: each fix shrinks what can be found. When each finding spawns a guard and the guard spawns new findings, the loop grows the code it is reviewing and diverges — while from inside, every round looks identical ("N findings, fix, re-run"). The origin mark is the instrument that distinguishes the two regimes.
+
+Three origins, all computed from git, zero declarations:
+
+| Origin | Definition | Role |
+| --- | --- | --- |
+| pre-existing | line exists at merge base | "Found outside this diff" section |
+| feature | line absent at merge base, present at the round-1 head | normal verdict finding |
+| churn | line introduced after the round-1 head, i.e. by the gate loop itself | normal verdict finding, plus loop diagnostics |
+
+Mechanics: `git blame` the finding's line, take the commit, check `git merge-base --is-ancestor <commit> <round1-head>`. The unit of attribution is the line — blame survives line moves; file-level heuristics do not. Blame per finding is cheap (findings number in the dozens). A line not yet committed has no blame commit and counts as introduced after the round-1 head — churn on a re-review round.
+
+Without `--round1-head` (first round, or the record is unavailable): every non-pre-existing finding is `feature`; skip churn diagnostics.
+
+What the mark does:
+
+1. Every verdict finding carries its origin.
+2. The review header states the ratio: `6 findings: 1 feature, 5 churn`.
+3. **Convergence rule**: churn in the majority for two consecutive rounds (the prior round's ratio comes from its review record, passed in the invocation context by the caller) means the review must OPEN with a process recommendation — "the loop is reviewing its own output; recommend freezing the guard surface or splitting it to its own branch" — before any NOT LGTM. The operator decides; the reviewer reports the regime.
+
+**The mark never touches verdict logic.** Severity and blocking are computed blind to origin; the label exists only in the header diagnostics. A bug in review-added code is a bug and blocks — "it came from review, so it's not a bug" is not derivable anywhere. A fix to feature code made during the gate is churn by mechanics, and that is correct semantics (second-generation work); that is why the trigger is majority-for-two-rounds, not mere presence.
+
+A majority-churn state has exactly three legal exits, none of which skips a bug:
+
+1. **Fix and continue** — the default; findings block as usual.
+2. **Carve out** — the churn-generating code moves to its own branch together with its open findings, which become that branch's starting backlog; that branch gets its own gate before it can merge. The bug is not forgiven; it moved with its carrier.
+3. **Delete** — the review-added code is removed entirely and its findings close as "code removed" (verified removed, not "won't fix"). No carrier, no bug to ship.
+
+Explicitly illegal: merging with an open churn finding in code that remains in the PR. Backstop the mark never touches: the terminal gate condition is LGTM on the final tree, computed origin-blind — for the final reviewer the churn category does not exist. Labels influence the route, never the exit check.
 
 <if --ticket>
 ### Ticket compliance
@@ -160,25 +213,36 @@ Ticket compliance issues are blocking (NOT LGTM) when requirements are missing o
 </if>
 
 <if --nitpick>
-Pedantic mode: include style nitpicks, naming suggestions, minor improvements.
-Leave no stone unturned.
+Pedantic mode: include style nitpicks, naming suggestions, minor improvements. Leave no stone unturned.
 </if>
 
 <if not --nitpick>
-Be direct. If something is fine, don't mention it.
-Focus on what matters, skip nitpicks.
+Be direct. If something is fine, don't mention it. Focus on what matters, skip nitpicks.
 </if>
 
 ## Output format
 
-Start your review with one of:
+Open with the review header, in this order:
 
-- **LGTM** — code is correct, safe, clear, and well-tested. May have minor cosmetic notes (listed as recommendations, not blockers)
-- **NOT LGTM** — there are issues that must be addressed before merging
+1. If the convergence rule fired (churn majority for two consecutive rounds): the process recommendation line FIRST, before the verdict.
+2. The verdict: **LGTM** or **NOT LGTM**.
+3. The review record: `Reviewed <REVIEW_BRANCH> at <REVIEW_HEAD> against <target-branch>`.
+4. When churn diagnostics are on: the origin ratio, e.g. `6 findings: 1 feature, 5 churn (+ 2 outside this diff)`.
 
-LGTM is a high bar. It means: no bugs, no security issues, no missing error handling, no logic gaps, no untested paths, no regressions to previously-working behavior. The ONLY things allowed to pass with LGTM are cosmetic issues (naming style, minor formatting) — and even those must be listed as "Recommended to fix" in the review. Everything else blocks. When in doubt, do not LGTM.
+Verdict semantics:
 
-Then provide the review as free-form text, like a human reviewer would write.
+- **NOT LGTM** — at least one verdict finding is open: a defect the diff introduced, worsened, or interacts with (bugs, logic errors, security issues, regressions, error-handling gaps, comments-as-fixes, docs the diff made wrong), missing tests for changed logic in a tested area, or missing `--ticket` requirements when `--ticket` was provided.
+- **LGTM** — no open verdict findings. **LGTM is compatible with a non-empty "Recommended" list** (naming, style, minor improvements, suggestions) and with a non-empty "Found outside this diff" section. When every finding is either recommended or outside the diff, the verdict is LGTM.
+
+Then two sections, same quality bar, same evidence discipline:
+
+### Verdict findings
+
+Findings attributed to the diff (introduced / worsened / interacts with), written as free-form text like a human reviewer would write. Only these decide the verdict. Each carries its origin mark when churn diagnostics are on. Non-blocking suggestions go under a **Recommended** subheading here — they do not flip the verdict.
+
+### Found outside this diff
+
+Everything discovered that already existed at the merge base, with full severity — a security hole found here is still reported as a security hole. Nothing is dropped; it is just not held hostage by this PR. When this section is non-empty, end it with the operator obligation: the gate is not closed until every finding here has a home — a filed issue, a parked branch, or a project-memory entry.
 
 <if --ticket>
 Include a **Ticket Compliance** section after the main review with:
@@ -187,12 +251,8 @@ Include a **Ticket Compliance** section after the main review with:
 - Overall verdict: "All requirements met" or "Missing requirements: ..."
 </if>
 
-End every review with this reminder (verbatim):
+Close with a short reminder of the three routing rules (adapt the wording to context; do not inflate it):
 
-> **Reminder:** "Pre-existing" is not a thing. If a problem is flagged in this review, it must be fixed in this PR — no exceptions.
->
-> **Every issue listed above must have a corresponding test.** No matter the severity — bug, logic error, security issue, error handling gap, documentation drift — each one must be covered by a test that fails without the fix and passes with it. Untested fixes are not fixes.
->
-> **Tests are the second source of truth.** In an area that already has tests, new functionality must be covered in full — valid use AND rejected/invalid use — so the tests document what is allowed and what is not, not just the happy path.
->
-> **What worked must keep working.** A regression is a blocker regardless of how few users it touches; only an explicitly declared, migration-documented breaking change may pass.
+- Attribution decides the section: the diff owns what it changed and what its changes interact with — nothing more, nothing less.
+- The remedy lives in the defect's layer: changed logic gets a test in the existing surface, prose gets the fix itself, and a new guard or checker is never a merge condition.
+- Outside findings need homes: a filed issue, a parked branch, or a memory entry — before the gate closes, not before this PR merges.
