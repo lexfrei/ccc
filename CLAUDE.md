@@ -11,7 +11,7 @@ Claude Code Companions (CCC) — an external marketplace repository for Claude C
 Four plugin types, each in its own top-level directory:
 
 - **`agents/`** — Agent definitions (markdown prompts in `agents/<name>/agents/<name>.md`, metadata in `agents/<name>/.claude-plugin/plugin.json`)
-- **`skills/`** — Skill definitions (markdown prompts in `skills/<name>/skills/<skill>/SKILL.md`, metadata in `skills/<name>/.claude-plugin/plugin.json`). A single skill plugin can bundle multiple skills (e.g., `review-toolkit` contains `branch-review`, `final-review`, `pr-review`)
+- **`skills/`** — Skill definitions (markdown prompts in `skills/<name>/skills/<skill>/SKILL.md`, metadata in `skills/<name>/.claude-plugin/plugin.json`). A single skill plugin can bundle multiple skills (e.g., `review-toolkit` contains `branch-review`, `pr-review`)
 - **`mcp/`** — MCP server definitions (server config in `mcp/<name>/.mcp.json`, metadata in `mcp/<name>/.claude-plugin/plugin.json`)
 - **`hooks/`** — Hook plugins (hook config in `hooks/<name>/hooks/hooks.json`, scripts in `hooks/<name>/scripts/`, metadata in `hooks/<name>/.claude-plugin/plugin.json`)
 
