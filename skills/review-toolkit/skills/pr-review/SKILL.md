@@ -142,7 +142,7 @@ Sequentially answer the five questions, taking notes. Frames 1-3 are a maintaine
 
 When the docs search returns empty, that is ambiguous — it can mean either (a) the change is plumbing/internal and legitimately needs no docs, or (b) the change is user-facing but the docs gap predates this PR. To resolve, open the relevant existing user-facing doc page and read it as a user would. Ask: does the documented workflow rely on the behavior this PR changes? Does it currently misrepresent reality (if a bug was latent)? Does it omit a now-relevant capability?
 
-For pre-existing cross-repo docs gaps, prepare a tracking-issue draft (title + body) now; it will be filed in Step 9 after user approval, and its URL spliced into the review under non-blocking follow-ups. Do not block the PR on a pre-existing cross-repo gap. For pre-existing in-repo docs that describe the area being changed, the cascaded `/branch-review` (Step 4a) treats them as blockers per its own rules — do not duplicate that logic here.
+For pre-existing cross-repo docs gaps, prepare a tracking-issue draft (title + body) now; it will be filed in Step 9 after user approval, and its URL spliced into the review under non-blocking follow-ups. Do not block the PR on a pre-existing cross-repo gap. In-repo docs follow the cascaded `/branch-review` (Step 4a) attribution rules: docs the diff made wrong are blockers there; docs already wrong at the merge base arrive in its "Found outside this diff" section and are routed to action items / tracking issues here — do not duplicate that logic.
 
 **Frame 5 — Is the code quality solid?** This frame is satisfied by the dual analysis in Step 4 (cascaded `/branch-review` + Codex + Claude). Note here whether any business-context concerns from Frames 1-3 need explicit cross-validation by the models, and forward those as hints into the dual analysis.
 
@@ -152,7 +152,7 @@ Run two analyses in sequence, then merge.
 
 ### 4a. Cascade `/branch-review`
 
-Invoke the `/branch-review` skill with `--target $PR_BASE` (and `--ticket <ticket>` if provided). It owns its own rules — LGTM/NOT LGTM verdict, "pre-existing in the neighborhood = own it", comments-as-fixes are blockers, tests-for-every-issue, doc accuracy. Do NOT duplicate those rules here. Capture its verdict and findings.
+Invoke the `/branch-review` skill with `--target $PR_BASE` (and `--ticket <ticket>` if provided; on a re-review round also `--round1-head <sha>` from the first round's output header — the `Reviewed <branch> at <sha>` line — and include the prior round's origin ratio in the invocation context so its convergence rule can fire). It owns its own rules — LGTM/NOT LGTM verdict, merge-base attribution (introduced / worsened / interacted-with defects block; purely pre-existing ones go to its "Found outside this diff" section), comments-as-fixes are blockers, remedy proportionality (changed logic needs a test in the existing test surface; a new checker, linter rule, CI job, or guard script is never a required remedy), doc accuracy for docs the diff made wrong. Do NOT duplicate those rules here. Capture its verdict and BOTH of its finding sections.
 
 If `/branch-review` is invoked from a directory whose active branch is not the PR branch, it creates a temporary worktree internally — see its SKILL.md for the worktree workflow.
 
@@ -270,7 +270,7 @@ The PR MUST NOT merge with any of these present:
 - Resource leaks under normal operation (not just edge cases)
 - Behavior changes with stale documentation in the area being changed
 - Missing `--ticket` requirements when `--ticket` was provided
-- Findings the cascaded `/branch-review` raised as blockers (LGTM bar, comments-as-fixes, in-repo doc accuracy, etc.)
+- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.)
 
 **Value/Design blockers (from Frames 1-3)** — the change should not merge in its current form for reasons independent of code correctness. Each still requires Step 5 evidence — a link to where the root cause lives, the specific spec/contract clause deviated from, or a concretely-named (ideally demonstrated) cleaner alternative. Without that evidence it is a non-blocking design note, not a blocker.
 
@@ -289,7 +289,7 @@ Real concerns worth surfacing but not blocking this merge:
 - Performance concerns that are not urgent
 - Internal-only documentation gaps
 - Non-critical refactoring opportunities
-- Pre-existing issues in code adjacent to but NOT touched by this PR
+- Pre-existing issues in code adjacent to but NOT touched by this PR, including everything from `/branch-review`'s "Found outside this diff" section — carry each into the review with its severity, and make sure each gets a home (a filed issue, a parked branch, or a project-memory entry); the gate is not closed until every one has one
 - Pre-existing cross-repo docs gaps (file a tracking issue per Step 8/9 and reference its URL)
 
 ## Step 7: Draft the Review with Verdict Gate
@@ -493,7 +493,7 @@ After publishing or updating, print the review URL so the user can verify it ren
 - **No speculation**: every finding must have an `**Evidence**:` line. Without evidence, drop.
 - **No-docs-found ≠ docs-OK**: open the relevant existing user-facing doc page and read it before declaring docs in sync.
 - **Pre-existing in cross-repo docs**: file a tracking issue (after user approval), reference it under non-blocking follow-ups, do not block.
-- **Pre-existing in code touched by the PR**: cascaded `/branch-review` treats these as blockers per its own rules. Do not soften them at this layer.
+- **Pre-existing defects**: cascaded `/branch-review` routes them by merge-base attribution — a defect the diff worsened, hid, or built on blocks; a purely pre-existing one arrives in its "Found outside this diff" section and becomes an action item that must get a home (filed issue, parked branch, or project-memory entry). Do not soften the former into the latter at this layer.
 - **Language**: ALL review content MUST be in English.
 - **No AI attribution in published text**: the review is from the user's GitHub account. Tags like `[Claude + Codex]` are internal — strip before publishing.
 - **Respect existing reviews**: read existing review comments. Do not repeat points already raised by other reviewers unless adding new evidence.
