@@ -22,8 +22,9 @@ The marketplace registry is `.claude-plugin/marketplace.json` — it indexes all
 1. Create the directory under the appropriate type (`agents/`, `skills/`, `mcp/`, or `hooks/`)
 2. Add `.claude-plugin/plugin.json` with name, version, description, author
 3. Add the content file(s): `.md` for agents, `SKILL.md` for skills, `.mcp.json` for MCP servers, `hooks/hooks.json` + scripts for hooks
-4. Register the plugin in `.claude-plugin/marketplace.json` under the `plugins` array
-5. Update `README.md` to include the new plugin in the appropriate table
+4. Add a `README.md` in the plugin directory: what the plugin does, installation commands, a section per bundled skill/agent, and how to extend it if applicable (convention applies to new plugins; older plugins are backfilled opportunistically)
+5. Register the plugin in `.claude-plugin/marketplace.json` under the `plugins` array
+6. Update `README.md` to include the new plugin in the appropriate table
 
 ## Validation
 

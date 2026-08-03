@@ -202,6 +202,12 @@
       "description": "Local disk cleanup utilities: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders and VM disk trim), Go caches, and Homebrew — each runs report → confirm → execute with interactive prompts, plus one orchestrating pipeline",
       "source": "./skills/cleanup",
       "category": "productivity"
+    },
+    {
+      "name": "become",
+      "description": "Session role switches. Currently bundles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly",
+      "source": "./skills/become",
+      "category": "productivity"
     }
   ]
 }
