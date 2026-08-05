@@ -19,8 +19,8 @@ What the role enforces:
 
 - **Entry gates** — first, whether the task needs a team at all (a fleet costs several times a single session and pays off only for context isolation, real parallelism, or specialization); second, that the manager seat runs on the strongest available model while teammates get an explicit cost-scaled model per task.
 - **Decomposition** — split at context boundaries rather than work types, disjoint file ownership per teammate, tasks sized to self-contained deliverables.
-- **Team topology** — one standing investigator per session, whole gate loops delegated to a single agent, one-shot workers killed after their work is saved, capped concurrency.
-- **Briefing** — success criteria, essential context only, an explicit verification requirement, a bounded report format, the comms contract, hard boundaries; plan approval for risky workstreams.
+- **Team topology** — one standing investigator per session, fix-review loops owned end-to-end by the implementing teammate, one-shot workers killed after their work is saved, finished teammates retired gently (final report and SHA, ground-truth check, then stop), capped concurrency.
+- **Briefing** — success criteria, essential context only, an explicit verification requirement (for code: a clean Codex review plus two consecutive `/branch-review` LGTMs on the same commit), a bounded report format, the comms contract, hard boundaries; plan approval for risky workstreams.
 - **Integration** — push only an explicitly stated final SHA, run the session's own quality gate on the assembled result, verify by ground truth rather than notifications, add an adversarial blackbox verifier when stakes warrant it.
 - **Approval boundary** — agent output inside the delegated scope is approved by the manager; anything leaving it (messages to people, other repositories, external services) waits for the user.
 
