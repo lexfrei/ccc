@@ -59,6 +59,8 @@ The matching rules on your side:
 - Do not rely on `isolation: "worktree"` when the session itself already runs inside a git worktree — nested isolation can silently fail and land every agent in the parent's tree. Either pre-create one worktree per agent yourself (`git worktree add <path> <base>`) and pass each agent its absolute path with a hard "work ONLY here" rule, or have each named teammate create its own worktree as its first action.
 - Have each teammate commit with explicit pathspecs (`git add <files>`, never `git add -A`) so even accidental sharing keeps commits per-track.
 - Never spawn a replacement onto a worktree another agent may still hold. Tell the incumbent to stand down, confirm it has (git status, file mtimes, process activity), and only then hand the tree over — a shutdown landing mid-edit destroys uncommitted work.
+- **Frozen means pushed.** The SHA a gate freezes on is pushed at the moment of freezing, not "before the PR". Ephemeral worktrees disappear and a shared `.git` does not survive cleanups — an unpushed frozen state exists in exactly one copy. This rule goes in the brief, not in follow-up messages.
+- **Scratch files live in a gitignored directory inside the agent's own worktree**, never in the shared flat `/tmp`: fixed names like `pr-body.md` collide across concurrent agents, and the loser publishes someone else's text. Worktree-local scratch is unreachable for `git add -A`, keeps a clean `git status` meaningful as the last pre-push check, and dies with the worktree.
 
 ## Integration rules
 
