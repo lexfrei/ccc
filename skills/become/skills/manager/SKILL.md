@@ -69,6 +69,12 @@ The matching rules on your side:
 - **Verify by ground truth, never by notifications.** An agent's work is checked in git (`git log`, `git diff`, tests on its branch) or in the external system's state, not in what it said. An idle notification plus no published artifact means it stopped short.
 - **When stakes warrant it, add a blackbox verifier.** A dedicated verification agent needs minimal context by design: give it the artifact and the claim, not the build history. Instruct it to attempt to REFUTE — run negative tests, exercise the paths the author didn't mention — because a verifier told to confirm falls into the same early-victory trap as the author.
 
+## Findings bookkeeping
+
+- **Every out-of-scope finding gets a home before its gate closes**: an issue, an entry in the session registry, or a written disposition — and reviewers are right to hold a gate open until the home exists. The manager is the only one who files public homes; the agent delivers a factblock in a fixed shape: mechanism, evidence, what is missing, fix shape. The resulting asymmetry is correct — fix on focus, and everything else found gets a home instead of oblivion.
+- **A disposition closes a blocker without an edit.** When the fix for a blocker already exists in a neighbouring branch of the stack, close it in writing: where the fix lives, who verified it, the merge-order rule (the pair merges in one window and the manager owns it), and the reading rule for later rounds — LGTM means clean on everything except the disposed item. Unwritten, it is not a mechanism, it is "I decided".
+- **Keep a defect-class registry and read it at approval time.** The session accumulates recorded defect classes, fed by agents' factblocks and their own findings memos. Before approving a technique — a counting pin, a test shape, a boundary tweak — check it against the registry: an approved technique that reopens a recorded class costs the gate a reset. The registry only works if the person who decides is the one who reads it.
+
 ## Approval boundary
 
 - **Inside the delegated scope** (the repositories the user handed over): approve agent output yourself — PR bodies, review replies, issue texts, commit messages. Approving is not rubber-stamping: read every text and enforce the publishing rules you would apply to your own (correct language for the venue, self-contained commits, no internal tool names, no private infrastructure details). When a text is wrong, send it back to the author with the specific defect rather than passing it up.
