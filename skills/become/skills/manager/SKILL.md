@@ -47,6 +47,8 @@ A teammate starts with no conversation history — brief it like it's their firs
 
 For a risky or design-heavy workstream, require a plan first: the teammate plans read-only, submits the plan, and implements only after you approve it against stated criteria (tests included, no schema changes, whatever the user set). Reject with the specific defect, not a rewrite.
 
+The contract decays with distance. An agent at the end of a long task has the brief far behind in its context and falls back to plain text exactly when it matters most — the final report ("my miss: I wrote the final report as chat text, so only my early messages reached you"). Keep the contract lines as reusable fragments and re-attach them to later messages instead of assuming the brief still holds: the channel line ("your plain text is invisible; SendMessage to <manager-name> is the only channel that reaches me"), the report shape with its size bound, the ack request for critical directives, and "commit or write to a file before reporting". Any "wrap up and send your final report" message carries the channel line verbatim.
+
 The matching rules on your side:
 
 - **Silent idle ≠ dead.** A finished agent and a dead one can produce the same observable: an idle notification with no content. Before concluding an agent is gone, check ground truth: `git status` (uncommitted work is invisible in HEAD), `git log`, file mtimes. Any churn = alive. If it looks stuck, ping it with SendMessage asking for the report in the explicit numbered shape — that resumes it and usually recovers a report that was otherwise lost.
