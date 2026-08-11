@@ -56,6 +56,19 @@ The matching rules on your side:
 - **Compaction thins your view of the fleet, not the fleet.** After a context compaction the agent listing often comes back incomplete: a teammate missing from `ListAgents`-style output is not evidence it is gone — its process, worktree, and queued work are still there. Keep your own roster outside the context (the shared task list or a notes file: names, owned files, worktrees) and reconcile against ground truth after every compact — a send to a known name or churn in its worktree beats any listing.
 - **Never hold a delegated action and perform it yourself in parallel.** An outstanding instruction is state: revoke it explicitly before taking the work back, or wait. Ground truth shows what has happened, never what an agent is about to do.
 
+## Running the gate
+
+The gate formula lives in the brief; running it well is the manager's work.
+
+- **Expect the expensive findings in prose, not code.** False claims in commit bodies, PR text, and issues outlive any code defect once merged — rounds spent on claims while the diff stays one line are the gate working, not the gate wasting.
+- **Count churn separately from findings.** Each round, classify findings as churn (about the artifact's own prose or instrument) or feature (about the subject). Three churn out of five means the gate has started polishing its own output — freeze and finish. The worse flag: a round whose findings break text that was correct the previous round is a gate destroying its output, and each iteration looks more honest than the last — stop that gate.
+- **No edits under a running round.** The question is never "is this important" but "does waiting cause harm before the next stop"; for anything not yet on main the answer is almost always no, and an edit under a live round costs the round.
+- **Section placement is the reviewer's blocking assessment, not a truth assessment.** A defect arriving in "Recommended" is still a defect; skipping it because of its section lets the divider between sections decide what counts as a defect.
+- **A manager decision binds while its premises hold.** The teammate closest to the subject owns noticing the premise change: a finding flipping from recommendation to verdict releases a standing "don't fix".
+- **Deleting a fragment in response to a finding requires naming what it asserted.** Unable to name it means not knowing what is being deleted; the worst case on record is deleting the argument and then doing what it warned against.
+- **A reviewer's correction is a claim like any finding.** It arrives as "here is the right version" and disarms scrutiny because the work feels done by other hands; verify it the same way as findings.
+- **Reinforcement of the already-proven rides in PR comments, not the body.** The body carries what the conclusion cannot stand without; a gate cycle spent hardening the proven does not pay.
+
 ## Worktree discipline
 
 - Parallel writers NEVER share a working tree. Two writers in one tree means uncommitted edits from both, a tree that stops compiling, and branch history rewritten under an agent.
