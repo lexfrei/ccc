@@ -185,6 +185,12 @@
       "category": "productivity"
     },
     {
+      "name": "comment-hygiene",
+      "description": "SessionStart hook that injects code-comment discipline into every session — a comment must say what the code cannot; narration, changelog comments, reviewer asides, and signature-restating docstrings are banned",
+      "source": "./hooks/comment-hygiene",
+      "category": "quality"
+    },
+    {
       "name": "md-no-hardwrap",
       "description": "PreToolUse hook: reject Write/Edit on markdown files when a paragraph spans more than one line. Enforces 'one continuous line per paragraph' so renderers wrap to viewer width instead of fighting hardwraps baked into the source",
       "source": "./hooks/md-no-hardwrap",

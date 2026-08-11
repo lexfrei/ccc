@@ -1,0 +1,9 @@
+{
+  "name": "comment-hygiene",
+  "version": "1.0.0",
+  "description": "SessionStart hook that injects code-comment discipline into every session — a comment must say what the code cannot; narration, changelog comments, reviewer asides, and signature-restating docstrings are banned",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
