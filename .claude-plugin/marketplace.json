@@ -186,7 +186,7 @@
     },
     {
       "name": "comment-hygiene",
-      "description": "SessionStart hook that injects code-comment discipline into every session — a comment must say what the code cannot; narration, changelog comments, reviewer asides, and signature-restating docstrings are banned",
+      "description": "SessionStart hook that injects code-comment discipline into every session — every comment must earn its place: say what the code cannot, never duplicate it; bans narration, changelog comments, reviewer asides, signature-restating docstrings, and leaky provenance",
       "source": "./hooks/comment-hygiene",
       "category": "quality"
     },
