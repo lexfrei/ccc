@@ -1,6 +1,6 @@
 {
   "name": "become",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Session role switches. Currently bundles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly",
   "author": {
     "name": "Aleksei Sviridkin",
