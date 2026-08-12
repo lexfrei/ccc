@@ -32,4 +32,4 @@ Edit [`rules/COMMENTS.md`](rules/COMMENTS.md) — whatever it contains is what g
 
 ## Related
 
-- `doc-curator` agent (this marketplace) — the after-the-fact counterpart: sweeps a codebase and removes AI-generated comment noise that already landed. `comment-hygiene` prevents; `doc-curator` cleans up.
+- `become:hygiene` agent (this marketplace) — the after-the-fact counterpart: sweeps a codebase and removes AI-generated comment noise that already landed. `comment-hygiene` prevents; `become:hygiene` cleans up.

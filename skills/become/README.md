@@ -1,6 +1,8 @@
 # become
 
-Session role switches for Claude Code. Each skill in this plugin turns the current session into a specific role that holds for the rest of the session. Roles are invoked as `/become:<role>`, and new roles are added as sibling skills under `skills/`.
+Session role switches for Claude Code, plus the specialist agents those roles put to work. Each skill in this plugin turns the current session into a specific role that holds for the rest of the session; each agent is a worker that role delegates to. Roles are invoked as `/become:<role>`, agents as `@agent-become:<agent>`.
+
+The two halves ship together on purpose: `become:manager` spawns teammates, and the agents below are the workforce it spawns. Installing the role without the workers, or the workers without the role, leaves half a system.
 
 ## Installation
 
@@ -28,6 +30,43 @@ What the role enforces:
 - **Claim verification** — recompute rather than recognize result-shaped claims, compare numbers only after establishing a shared denominator (run the original author's formula), verify with your own method and tooling from main, relay foreign numbers with attribution that keeps them checkable, return report-derived generalizations as hypotheses to check against the full set, treat two identical observations at different tracks as a base rate, derive filing actions from world state, treat a threshold raise as widening what can hide under it.
 - **Carriers** — every rule adopted mid-session names the mechanism that executes it instead of memory (a machine check, a mandatory report field, the grammar of the required phrase), bound to an action rather than a state of mind; rules ship with the input on which they break; issued carriers are tested on divergent states and a past defect before going out; threshold carriers catch accumulation and advisory carriers narrow searches without ruling; a finding stays open until a carrier exists for it.
 
+## Agents
+
+Specialist agents, each a standalone persona with its own standards and prohibitions. Spawn one as a fleet teammate, or call it directly with `@agent-become:<name>`. The names are deliberately plain, which means a bare `--agent go` can become ambiguous if another installed plugin ever ships its own `go`; the scoped form always resolves.
+
+| Agent | What it does |
+| --- | --- |
+| **architecture** | Technical architect and repository knowledge keeper — library and framework choice, design patterns, ADRs, owns `.architecture.yaml` as the single source of truth |
+| **go** | Go implementation, test-first — cloud-native services with Echo, slog, and cockroachdb/errors |
+| **python** | Python implementation, test-first — FastAPI, Pydantic, structlog, strict typing, code treated as craft |
+| **templ** | Web UI in Go Templ and HTMX — server-side rendering, progressive enhancement, WCAG 2.1 AA accessibility as a hard requirement |
+| **kubernetes** | Kubernetes manifests and ArgoCD applications — production-ready, zero-trust networking, GitOps conventions |
+| **helm** | Helm charts, test-first — helm-unittest tests written before the templates they cover |
+| **containers** | Container images — multi-stage builds, distroless bases, minimal attack surface |
+| **quality** | Validation and delivery — linters, tests, security checks, `.architecture.yaml` compliance, then the git commit and push once everything passes |
+| **hygiene** | AI-artifact cleanup — removes narrating comments, verbose documentation, and naming that reads as generated |
+
+### Upgrading from the standalone agent plugins
+
+These agents used to ship as ten separate plugins. Installing `become` replaces nine of them and drops the tenth, and the marketplace migrates the old plugin names automatically on Claude Code v2.1.193 or newer — earlier versions ignore the migration map and report `plugin-not-found` for the old names. Either way the invocation names changed, so `@agent-kube-pilot` no longer resolves to anything:
+
+| Was | Now |
+| --- | --- |
+| `chart-builder` | `@agent-become:helm` |
+| `code-guardian` | `@agent-become:quality` |
+| `doc-curator` | `@agent-become:hygiene` |
+| `docker-smith` | `@agent-become:containers` |
+| `gopher-builder` | `@agent-become:go` |
+| `kube-pilot` | `@agent-become:kubernetes` |
+| `snake-charmer` | `@agent-become:python` |
+| `tech-oracle` | `@agent-become:architecture` |
+| `templ-weaver` | `@agent-become:templ` |
+| `task-orchestrator` | removed — `/become:manager` decomposes work at the fleet level |
+
+Frontmatter is deliberately minimal: `name`, `description`, `model`, `color`. No `tools` allowlist, so every agent inherits the full toolset. Per-agent filtering was dropped because it never paid for itself: the list has to enumerate everything the agent will ever need, and it fails by omission, silently, as a capability the agent turns out not to have. Where a restriction is genuinely wanted, `disallowedTools` denies a few tools without enumerating the rest. It was considered for `quality`, the one agent here that commits and pushes, and declined: `Bash` stays inherited either way, so denying `Write` and `Edit` removes the direct route to a file and leaves the indirect one, and a file that reads as guarded while a shell redirect walks around the guard is worse than one that states its rule. The constraint it would have expressed is carried in that agent's own prompt instead — it is the gate, not the author, and it reports a failing check rather than editing the code to make it pass, because an edit of its own would ship under a report saying only that validation passed. No `hooks`, `mcpServers`, or `permissionMode` either: the loader warns about all three and then builds the agent definition without them, so a plugin-shipped agent never carries any of the three whatever the file says. The `model` value is only a default: an explicit model on the spawn call overrides it, and `become:manager` passes one on every call. It matters when you invoke an agent directly — `architecture` defaults to `opus` because the role is judgment-heavy, every other agent to `sonnet`.
+
 ## Extending
 
 Add a new role as `skills/<role>/SKILL.md` inside this plugin and list it in the plugin description. It becomes available as `/become:<role>` with no other changes.
+
+Add a new agent as `agents/<name>.md` with the same four frontmatter fields. Claude Code scans `agents/` automatically, so the file is the whole change — but list the agent in the plugin description and in the table above, and keep the description identical in `plugin.json` and the marketplace entry.
