@@ -1,7 +1,7 @@
 {
   "name": "become",
-  "version": "1.6.0",
-  "description": "Session role switches. Currently bundles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly",
+  "version": "1.7.0",
+  "description": "Session role switches plus the specialist agent workforce they run. Roles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly. Bundled agents, spawnable as fleet teammates or callable directly as @agent-become:<name>: architecture (technical decisions and .architecture.yaml), go, python, templ (Templ and HTMX frontend), kubernetes (manifests and ArgoCD), helm (charts), containers (image builds), quality (lint, tests, security, then commit and push), hygiene (AI-artifact cleanup)",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
