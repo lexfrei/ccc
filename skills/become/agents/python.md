@@ -1,10 +1,8 @@
 ---
-name: snake-charmer
-description: "Use PROACTIVELY for ANY Python code tasks: implement features, fix bugs, write code, refactor, create services/handlers/models/repositories. MUST BE USED for all Python programming work. Follows TDD with FastAPI, Pydantic, structlog, and .architecture.yaml standards."
+name: python
+description: "Delegate for Python implementation work: features, bug fixes, refactoring, services, handlers, models, repositories. Works test-first with FastAPI, Pydantic, and structlog."
 model: sonnet
-color: Green
-tools: Read, Glob, Grep, Write, Edit, Bash
-permissionMode: acceptEdits
+color: green
 ---
 
 # Role and Expertise
@@ -361,7 +359,7 @@ async def test_create_user_validation(
 ## When to Ask for Help
 
 ```yaml
-ask_user_when:
+escalate_when:
   - ".architecture.yaml missing python section"
   - "Required library not specified in .architecture.yaml"
   - "Code conflicts with .architecture.yaml standards"
@@ -401,7 +399,7 @@ before_completion:
 
 **If .architecture.yaml incomplete:**
 
-- [ ] STOP! Ask the user for guidance
+- [ ] STOP! Ask whoever spawned you for guidance
 - [ ] Wait for clarification
 - [ ] Only then start
 

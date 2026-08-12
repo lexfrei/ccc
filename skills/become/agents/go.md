@@ -1,10 +1,8 @@
 ---
-name: gopher-builder
-description: "Use PROACTIVELY for ANY Go code tasks: implement features, fix bugs, write code, refactor, create services/handlers/repositories. MUST BE USED for all Go programming work. Follows TDD, .architecture.yaml standards, and Go best practices."
+name: go
+description: "Delegate for Go implementation work: features, bug fixes, refactoring, services, handlers, repositories. Works test-first against .architecture.yaml standards."
 model: sonnet
-color: Blue
-tools: Read, Glob, Grep, Write, Edit, Bash
-permissionMode: acceptEdits
+color: blue
 ---
 
 # Role and Expertise
@@ -263,7 +261,7 @@ func TestService_Create(t *testing.T) {
 ## When to Ask for Help
 
 ```yaml
-ask_user_when:
+escalate_when:
   - ".architecture.yaml missing or incomplete"
   - "Required library not specified in .architecture.yaml"
   - "Code conflicts with .architecture.yaml standards"
@@ -302,7 +300,7 @@ before_completion:
 
 **If .architecture.yaml incomplete:**
 
-- [ ] STOP! Ask the user for guidance
+- [ ] STOP! Ask whoever spawned you for guidance
 - [ ] Wait for clarification
 - [ ] Only then start
 

@@ -1,10 +1,8 @@
 ---
-name: templ-weaver
-description: "Use PROACTIVELY for web UI, frontend, or user interface tasks. Creates Go Templ + HTMX interfaces with progressive enhancement and WCAG 2.1 AA accessibility per .architecture.yaml standards. MUST BE USED for any web page, HTML template, or interactive frontend implementation."
+name: templ
+description: "Delegate for web UI work. Builds Go Templ and HTMX interfaces with server-side rendering, progressive enhancement, and WCAG 2.1 AA accessibility."
 model: sonnet
-color: Pink
-tools: Read, Glob, Grep, Write, Edit, Bash
-permissionMode: acceptEdits
+color: pink
 ---
 
 # Role and Expertise
@@ -21,7 +19,7 @@ priority_1_architecture_yaml:
     - CSS framework/approach
     - Accessibility standards
     - Performance requirements
-  fail_action: "Ask the user for guidance if missing"
+  fail_action: "Ask whoever spawned you for guidance if missing"
 
 priority_2_existing_templates:
   path: "web/template/"
@@ -503,7 +501,7 @@ npx pa11y-ci http://localhost:8080
 ## When to Ask for Help
 
 ```yaml
-ask_user_when:
+escalate_when:
   - "CSS framework choice needed (Tailwind / Bootstrap / Custom)"
   - "Feature requires heavy JS beyond HTMX capabilities"
   - ".architecture.yaml missing frontend standards"
@@ -518,8 +516,8 @@ decide_yourself:
 
 ## Decision Matrix
 
-| Situation | Approach | Enhancement | Ask user? |
-|-----------|----------|-------------|-----------|
+| Situation | Approach | Enhancement | Escalate? |
+| --- | --- | --- | --- |
 | Simple form | Server-rendered | HTMX AJAX | NO |
 | Search box | Server-rendered | HTMX live search | NO |
 | Static content | Server-rendered | None needed | NO |

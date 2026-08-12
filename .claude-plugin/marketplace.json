@@ -8,66 +8,6 @@
   },
   "plugins": [
     {
-      "name": "task-orchestrator",
-      "description": "Project analysis and planning agent — decomposes complex tasks, creates implementation plans, identifies risks and dependencies",
-      "source": "./agents/task-orchestrator",
-      "category": "development"
-    },
-    {
-      "name": "tech-oracle",
-      "description": "Technical architect agent — manages .architecture.yaml, creates ADRs, evaluates technology choices and design patterns",
-      "source": "./agents/tech-oracle",
-      "category": "development"
-    },
-    {
-      "name": "gopher-builder",
-      "description": "Go developer agent — TDD specialist for cloud-native Go applications with Echo, slog, and cockroachdb/errors",
-      "source": "./agents/gopher-builder",
-      "category": "development"
-    },
-    {
-      "name": "snake-charmer",
-      "description": "Python developer agent — TDD specialist treating code as art, with FastAPI, Pydantic, structlog, and strict typing",
-      "source": "./agents/snake-charmer",
-      "category": "development"
-    },
-    {
-      "name": "templ-weaver",
-      "description": "Frontend specialist — Go Templ + HTMX with server-first rendering and WCAG 2.1 AA accessibility",
-      "source": "./agents/templ-weaver",
-      "category": "development"
-    },
-    {
-      "name": "kube-pilot",
-      "description": "Kubernetes specialist — creates secure, production-ready K8s manifests and ArgoCD applications with zero-trust networking",
-      "source": "./agents/kube-pilot",
-      "category": "infrastructure"
-    },
-    {
-      "name": "chart-builder",
-      "description": "Helm chart TDD specialist — creates production-ready Helm charts with helm-unittest following .architecture.yaml standards",
-      "source": "./agents/chart-builder",
-      "category": "infrastructure"
-    },
-    {
-      "name": "docker-smith",
-      "description": "Containerization specialist — creates optimized, secure Containerfiles with multi-stage builds and distroless base images",
-      "source": "./agents/docker-smith",
-      "category": "infrastructure"
-    },
-    {
-      "name": "code-guardian",
-      "description": "Code quality validation agent — runs linters, tests, security checks, and verifies .architecture.yaml compliance",
-      "source": "./agents/code-guardian",
-      "category": "quality"
-    },
-    {
-      "name": "doc-curator",
-      "description": "AI artifact cleanup agent — detects and removes AI-generated comments, excessive documentation, and non-professional code patterns",
-      "source": "./agents/doc-curator",
-      "category": "quality"
-    },
-    {
       "name": "review-toolkit",
       "description": "Comprehensive PR review pipeline: a pre-review readiness gate (stops on merge conflicts or red code-related CI with a fix-it note, no verdict), branch-level analysis with merge-base attribution (the verdict is decided only by defects the diff introduced, worsened, or interacts with — purely pre-existing defects are reported in full in a separate outside-findings section and routed to a filed issue, parked branch, or memory entry instead of blocking), sequential Claude+Codex dual-model review with evidence-based verification, and opt-in GitHub PR review publishing under a five-frame substance framework. A value/design gate weighs whether the change should exist at all — value versus permanent maintenance cost, right layer, root cause in-repo versus upstream — and can block a PR even when the code is flawless. Remedies stay proportional: changed logic needs tests in the existing test surface, fixed prose is its own deliverable, and a new checker or guard script is never a required remedy. Findings carry git-computed origin labels (feature vs churn) that diagnose diverging review loops without ever touching the verdict. Reviews land on an LGTM or NOT LGTM verdict, compatible with non-blocking recommendations; the only no-verdict path is the readiness gate's fix-CI / fix-conflicts note.",
       "source": "./skills/review-toolkit",
@@ -211,9 +151,21 @@
     },
     {
       "name": "become",
-      "description": "Session role switches. Currently bundles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly",
+      "description": "Session role switches plus the specialist agent workforce they run. Roles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly. Bundled agents, spawnable as fleet teammates or callable directly as @agent-become:<name>: architecture (technical decisions and .architecture.yaml), go, python, templ (Templ and HTMX frontend), kubernetes (manifests and ArgoCD), helm (charts), containers (image builds), quality (lint, tests, security, then commit and push), hygiene (AI-artifact cleanup)",
       "source": "./skills/become",
       "category": "productivity"
     }
-  ]
+  ],
+  "renames": {
+    "chart-builder": "become",
+    "code-guardian": "become",
+    "doc-curator": "become",
+    "docker-smith": "become",
+    "gopher-builder": "become",
+    "kube-pilot": "become",
+    "snake-charmer": "become",
+    "tech-oracle": "become",
+    "templ-weaver": "become",
+    "task-orchestrator": null
+  }
 }

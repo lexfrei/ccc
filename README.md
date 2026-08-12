@@ -36,22 +36,9 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 
 ## Plugins
 
-### Agents
-
-| Plugin | Description |
-| --- | --- |
-| **task-orchestrator** | Project analysis and planning — decomposes complex tasks, creates implementation plans, identifies risks |
-| **tech-oracle** | Technical architect — manages .architecture.yaml, creates ADRs, evaluates technology choices |
-| **gopher-builder** | Go developer — TDD specialist for cloud-native apps with Echo, slog, cockroachdb/errors |
-| **snake-charmer** | Python developer — TDD specialist treating code as art, with FastAPI, Pydantic, structlog |
-| **templ-weaver** | Frontend specialist — Go Templ + HTMX with server-first rendering and WCAG 2.1 AA accessibility |
-| **kube-pilot** | Kubernetes specialist — secure, production-ready K8s manifests and ArgoCD with zero-trust networking |
-| **chart-builder** | Helm chart TDD specialist — production-ready charts with helm-unittest |
-| **docker-smith** | Containerization specialist — optimized, secure Containerfiles with multi-stage builds |
-| **code-guardian** | Code quality validation — linters, tests, security checks, .architecture.yaml compliance |
-| **doc-curator** | AI artifact cleanup — removes AI-generated comments, excessive docs, non-professional patterns |
-
 ### Skills
+
+The ten standalone agent plugins are gone. Nine of their agents ship inside **become**, renamed to their craft; the tenth was dropped. The old-to-new mapping is in [its README](skills/become/README.md#upgrading-from-the-standalone-agent-plugins).
 
 | Plugin | Description |
 | --- | --- |
@@ -70,7 +57,7 @@ Or enable automatic updates: `/plugin` → **Marketplaces** tab → select `clau
 | **helm-add-gwapi-route** | Add or modernize Gateway API *Route templates (HTTPRoute/GRPCRoute/TLSRoute/TCPRoute/UDPRoute) in a Helm chart. Auto-detects add vs update mode per route kind; applies current best practices (named rules, typed filters, optional BackendTLSPolicy). File edits only — no git operations |
 | **pore-analysis** | Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi, radial g(r) + orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes — no hardcoded autodetect |
 | **cleanup** | Local disk cleanup: stale git worktrees, dead personal forks, Docker prune (incl. non-default buildx builders and VM disk trim), Go caches, and Homebrew — each report → confirm → execute with interactive prompts, plus a `cleanup-all` pipeline. Paths are asked, never hardcoded |
-| **become** | Session role switches (`become:manager`, more roles to come). Manager: lead of a subagent fleet — brief teammates, delegate whole loops, approve their output inside the delegated scope, integrate by ground truth, report upward in short digests. Strongest model in the manager seat, explicit opus/sonnet per teammate |
+| **become** | Session role switches plus the specialist agents they run. Manager (`/become:manager`): lead of a subagent fleet — brief teammates, delegate whole loops, approve their output inside the delegated scope, integrate by ground truth, report upward in short digests. Bundled workforce, spawnable as teammates or callable as `@agent-become:<name>`: **architecture** (technical decisions, `.architecture.yaml`), **go**, **python**, **templ** (Templ + HTMX), **kubernetes** (manifests, ArgoCD), **helm** (charts), **containers** (image builds), **quality** (lint, tests, security, then commit and push), **hygiene** (AI-artifact cleanup) |
 
 ### MCP Servers
 

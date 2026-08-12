@@ -1,6 +1,6 @@
 {
   "name": "agent-father",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Interactive skill for creating well-structured Claude Code subagents following official documentation standards",
   "author": {
     "name": "Aleksei Sviridkin",
