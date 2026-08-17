@@ -18,7 +18,7 @@ Invoked automatically when a debugging, tuning, or repro plan involves three or 
 The workflow:
 
 1. **Gate** — checks the problem actually fits: 3+ factors, expensive runs, independently settable levels. Single factor → bisection; cheap runs → full factorial; more than ~11 factors → shrink the list first.
-2. **Factors and levels** — every factor forced to 2 or 3 discrete levels.
+2. **Factors and levels** — every factor forced to 2 or 3 discrete levels; observable-but-unsettable factors are recorded as covariates and checked at analysis time.
 3. **Array selection** — smallest of L4, L8, L9, L12, L18 that fits; dummy-treatment trick for mixed 2/3-level factor sets.
 4. **Run sheet** — the plan rendered with concrete values, plus repetition and run-order rules for flaky bugs and drifting environments.
 5. **Main-effects analysis** — outcomes averaged per factor level, factors ranked by effect size, verdicts for clean splits and muddy signals.

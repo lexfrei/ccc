@@ -25,6 +25,7 @@ Build the factor table with the user (or from the debugging context). Force ever
 - Versions → current vs suspected-bad (2 levels), add a third only if a middle version genuinely discriminates.
 - Continuous values (timeout, batch size, memory limit) → the two extremes of the plausible range; a midpoint only as a third level.
 - A factor nobody can articulate a level for is not a factor — drop it or fix it at its current value.
+- A factor you can observe but not set (region, node shape, neighbor load) is a covariate, not a column: record its value for every run and check it during analysis (step 5).
 
 ## Step 2 — pick the array
 
@@ -139,12 +140,14 @@ Assign each factor to a column and render the plan with concrete values, not lev
 Execution notes:
 
 - Deterministic software: run in any order, once per row.
-- Flaky or nondeterministic bug: repeat the whole array N times rather than repeating single rows — repetition count per row stays balanced.
+- Flaky or nondeterministic bug: repeat the whole array N times rather than repeating single rows — repetition count per row stays balanced. Size N from the repro probability p observed on the known-bad config: N ≥ ln(0.05)/ln(1−p) gives 95% confidence that a guilty row fails at least once (p=0.5 → 5, p=0.3 → 9, p=0.1 → 29). Total cost is rows × N — when that number comes out absurd, the response is wrong, not the array: switch to a numeric outcome (step 4).
 - Environment that drifts between runs (hardware warm-up, cache state, quota): randomize run order so drift doesn't masquerade as a factor effect.
 
 ## Step 4 — record outcomes
 
 One outcome per run: binary (fail/pass) or numeric (latency, RSS, error count). For flaky repros with repeats, record the failure count per row.
+
+Prefer a numeric outcome over binary whenever one exists (latency, retry count, time-to-first-error): a continuous response discriminates levels in a single pass of the array, while a binary one pays the ×N repetition tax from step 3. Record the covariates from step 1 alongside the outcome of every run.
 
 ## Step 5 — main-effects analysis
 
@@ -161,6 +164,8 @@ Rank factors by Δ. Reading the verdict:
 - **Clean split** (one level holds all failures, the other none) → prime suspect.
 - **Δ ≈ 0** → factor is innocent at these levels — stop iterating on it.
 - **Two factors split cleanly at once, or all Δ are mid-range** → an interaction or a confound; go to step 7.
+
+Before believing a clean split, check the recorded covariates: one that tracks the outcome is both a suspect in its own right and a hole in the balance the array guarantees only for assigned columns. A covariate implicated this way graduates to a real factor — find a way to set it and rerun.
 
 ## Step 6 — confirmation run
 
