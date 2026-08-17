@@ -1,6 +1,6 @@
 # doe
 
-Design-of-experiments skills for cutting debugging and tuning iterations. `taguchi` is the first method shipped; the plugin is the umbrella further experiment-design skills land under.
+Design-of-experiments skills for cutting debugging and tuning iterations. Four methods ship today, each behind its own auto-triggering skill: `taguchi` (balanced orthogonal arrays, factor ranking), `pairwise` (covering arrays for arbitrary level mixes), `shrink` (group testing for single-culprit hunts), and `tune` (S/N-ratio knob optimization). The skills route to each other: the taguchi gate hands boolean single-culprit hunts to shrink, odd level counts to pairwise, and optimization to tune.
 
 ## Installation
 
@@ -32,8 +32,20 @@ The workflow:
 7. **Confirmation runs** — an accusation run and an acquittal run before any root-cause claim.
 8. **Interaction fallback** — full factorial on the top-2 suspects when main effects are confounded.
 
+### pairwise
+
+Covering arrays for factors whose level counts fit none of the fixed taguchi shapes — a 4-level factor, a 5-value enum, uneven mixes like 4×3×2×2. A bundled deterministic generator (`skills/pairwise/scripts/pairwise.py`, stdlib-only, self-verifying) emits a near-minimal run sheet in which every pair of factor levels appears at least once, so anything driven by one factor or a two-factor interaction is guaranteed to fire. Covering arrays are not balanced, so the analysis works from failure patterns (levels constant across failing rows) instead of level means, and hands shortlisted suspects back to `taguchi` for balanced ranking.
+
+### shrink
+
+Group testing and delta debugging for the "which of these 30 toggles breaks it" shape: an expected single culprit (or small set) among many boolean suspects. Split-half finds one culprit in log2 n to 2·log2 n runs; the ddmin scheme handles multiple culprits; mandatory baseline runs (all-innocent must pass, all-suspect must fail) catch a wrong suspect list before the search starts. For flaky bugs the skill treats pass and fail asymmetrically — a fail is certain, a pass needs repeats before it can steer the search.
+
+### tune
+
+The taguchi machinery pointed at optimization: pick values for several interacting knobs (limits, timeouts, pool sizes) in one designed experiment instead of one-knob-at-a-time sweeps. Prefers 3-level knobs to capture curvature, computes Taguchi S/N ratios per goal (minimize, maximize, hit-a-target), picks each knob's best level column-wise, and requires a confirmation run of the predicted optimum — with a top-2 factorial (or fold-over, on 2-level arrays only) when interactions break additivity, and zoom rounds for continuous knobs.
+
 ## Extending
 
-The embedded arrays (L4, L8, L9, L12, L18) are pairwise-balanced. To add a larger array (L16, L27, ...), verify it before embedding: for every pair of columns, every combination of levels must appear equally often. A one-off script that counts pair combinations across columns is enough — do not trust a table pasted from memory or from an unverified web page.
+The taguchi skill's embedded arrays (L4, L8, L9, L12, L18) are pairwise-balanced. To add a larger array (L16, L27, ...), verify it before embedding: for every pair of columns, every combination of levels must appear equally often. A one-off script that counts pair combinations across columns is enough — do not trust a table pasted from memory or from an unverified web page.
 
-New methods (pairwise covering arrays for arbitrary level mixes, group-testing shrink, S/N-ratio tuning) belong here as sibling skills under `skills/`, each with its own SKILL.md and a section in this README.
+New methods belong here as sibling skills under `skills/`, each with its own SKILL.md and a section in this README. A skill that needs real computation ships it as a tested stdlib-only script next to the prompt (see `pairwise` for the pattern), never as shell embedded in the prompt.

@@ -63,7 +63,7 @@
     },
     {
       "name": "doe",
-      "description": "Design-of-experiments toolkit for cutting debugging and tuning iterations. Ships the taguchi skill: plan a minimal run set with orthogonal arrays instead of one-change-at-a-time iteration, rank suspects by main effects, confirm the culprit",
+      "description": "Design-of-experiments toolkit for cutting debugging and tuning iterations: taguchi orthogonal arrays for factor isolation, pairwise covering arrays for arbitrary level mixes, group-testing shrink for single-culprit hunts, S/N-ratio tuning for knob optimization",
       "source": "./skills/doe",
       "category": "development"
     },
