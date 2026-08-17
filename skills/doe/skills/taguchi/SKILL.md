@@ -15,7 +15,9 @@ Confirm all of these before proceeding; otherwise use the cheaper tool and say s
 - **3+ candidate factors.** One factor → plain bisection. Two factors → just run the 2×2 (4 runs).
 - **Runs are expensive.** If a run is seconds, brute-force the full factorial instead.
 - **Factors are independently settable.** If setting A=2 forces B=2, merge them into one factor.
-- **At most ~11 factors** — that is the 2-level ceiling; 3-level factors cap out at 7 (plus one 2-level) in L18. More than that means the suspect list was never narrowed — first do a split-half / group-testing pass to shrink it, then design the array for the survivors.
+- **At most ~11 factors** — that is the 2-level ceiling; 3-level factors cap out at 7 (plus one 2-level) in L18. More than that means the suspect list was never narrowed — shrink it first (the shrink skill in this plugin), then design the array for the survivors.
+
+Sibling skills cover the neighboring shapes: an expected single culprit among many boolean toggles → shrink; level counts that fit no array below → pairwise; optimizing knobs rather than hunting a culprit → tune.
 
 ## Step 1 — factors and levels
 
@@ -39,7 +41,7 @@ Smallest array that fits all factors:
 | ≤11 × 2-level | L12 | 12 | 2048 |
 | 1 × 2-level + ≤7 × 3-level | L18 | 18 | 4374 |
 
-Mixed 2- and 3-level factors: dummy treatment — a 2-level factor sits in a 3-level column with level 3 repeating level 1 (coverage holds, the repeated level just gets more runs). Up to 4 factors total fit L9 this way at 9 runs; bigger mixes take L18. Extra columns beyond your factor count are simply left unassigned.
+Mixed 2- and 3-level factors: dummy treatment — a 2-level factor sits in a 3-level column with level 3 repeating level 1 (coverage holds, the repeated level just gets more runs). Up to 4 factors total fit L9 this way at 9 runs; bigger mixes take L18. Extra columns beyond your factor count are simply left unassigned. Level counts that fit none of these shapes (a 4-level factor, uneven mixes) → the pairwise skill generates a covering array for arbitrary levels.
 
 ## The arrays
 
@@ -159,6 +161,8 @@ For each factor, average the outcome over all runs at each level — the array's
 | Node | 1/2 fail | 1/2 fail | 0.00 |
 | Lockfile | 1/2 fail | 1/2 fail | 0.00 |
 
+With repeats, establish the noise floor before ranking: the typical spread between repeats of the same row. A Δ below that spread separates nothing — the factor stays unranked until more repeats say otherwise.
+
 Rank factors by Δ. Reading the verdict:
 
 - **Clean split** (one level holds all failures, the other none) → prime suspect.
@@ -178,4 +182,9 @@ If either run contradicts the prediction, the effect is an interaction — go to
 
 ## Step 7 — when effects are muddy
 
-Orthogonal arrays confound interactions with main effects — that is the price of the run savings. When the signal is not clean: take the two highest-Δ factors, run their full factorial (4 or 9 runs) with everything else fixed, and read the interaction directly. If that is still muddy, the factor list is missing the real variable — go back to step 1 rather than adding runs.
+Orthogonal arrays confound interactions with main effects — that is the price of the run savings. When the signal is not clean, two exits:
+
+- Two factors stand out → run their full factorial (4 or 9 runs) with everything else fixed and read the interaction directly.
+- Several factors look muddy at once on L8 or L12 → fold the design over: rerun the same array with the two levels swapped everywhere and analyze all 16 or 24 runs together. Main effects come out clean of every two-factor interaction, for double the runs.
+
+If it is still muddy after that, the factor list is missing the real variable — go back to step 1 rather than adding runs.
