@@ -62,6 +62,12 @@
       "category": "productivity"
     },
     {
+      "name": "taguchi",
+      "description": "Plan a minimal set of debugging or testing runs with Taguchi orthogonal arrays — cover many candidate factors in few runs instead of one-change-at-a-time iteration, rank suspects by main effects, confirm the culprit",
+      "source": "./skills/taguchi",
+      "category": "development"
+    },
+    {
       "name": "m4b-audiobook",
       "description": "Assemble m4b audiobook from audio files with chapters, metadata, and cover art using ffmpeg",
       "source": "./skills/m4b-audiobook",
