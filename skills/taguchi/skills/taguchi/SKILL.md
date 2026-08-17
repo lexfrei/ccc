@@ -15,7 +15,7 @@ Confirm all of these before proceeding; otherwise use the cheaper tool and say s
 - **3+ candidate factors.** One factor → plain bisection. Two factors → just run the 2×2 (4 runs).
 - **Runs are expensive.** If a run is seconds, brute-force the full factorial instead.
 - **Factors are independently settable.** If setting A=2 forces B=2, merge them into one factor.
-- **At most ~11 factors.** More than 11 means the suspect list was never narrowed — first do a split-half / group-testing pass to shrink it, then design the array for the survivors.
+- **At most ~11 factors** — that is the 2-level ceiling; 3-level factors cap out at 7 (plus one 2-level) in L18. More than that means the suspect list was never narrowed — first do a split-half / group-testing pass to shrink it, then design the array for the survivors.
 
 ## Step 1 — factors and levels
 
@@ -39,7 +39,7 @@ Smallest array that fits all factors:
 | ≤11 × 2-level | L12 | 12 | 2048 |
 | 1 × 2-level + ≤7 × 3-level | L18 | 18 | 4374 |
 
-Mixed 2- and 3-level factors: take L18, and place each extra 2-level factor into a 3-level column by repeating level 1 as level 3 (dummy treatment — coverage holds, the repeated level just gets more runs). Extra columns beyond your factor count are simply left unassigned.
+Mixed 2- and 3-level factors: dummy treatment — a 2-level factor sits in a 3-level column with level 3 repeating level 1 (coverage holds, the repeated level just gets more runs). Up to 4 factors total fit L9 this way at 9 runs; bigger mixes take L18. Extra columns beyond your factor count are simply left unassigned.
 
 ## The arrays
 
