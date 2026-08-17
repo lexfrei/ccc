@@ -51,6 +51,7 @@ The ten standalone agent plugins are gone. Nine of their agents ship inside **be
 | **renovate-check** | Run Renovate locally in dry-run mode, research migration guides, apply selected updates |
 | **agent-father** | Interactive guide for creating Claude Code subagents following official documentation standards |
 | **billy** | "Where's the proof, Billy?" — stop and prove a claim with deep investigation |
+| **taguchi** | Plan debugging/testing runs with Taguchi orthogonal arrays — cover many candidate factors in few runs instead of one-change-at-a-time iteration, rank suspects by main effects, confirm the culprit |
 | **m4b-audiobook** | Assemble m4b audiobook from audio files with chapters, metadata, and cover art |
 | **say** | Speak text aloud using macOS TTS with automatic voice selection |
 | **slack-formatter** | Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved |
