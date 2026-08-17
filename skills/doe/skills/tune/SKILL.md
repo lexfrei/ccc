@@ -1,0 +1,39 @@
+---
+name: tune
+description: Optimize a numeric outcome (latency, throughput, memory, cost) over 3+ knobs with a Taguchi designed experiment and S/N-ratio analysis instead of tweaking one knob at a time. TRIGGER — invoke when the task is picking values for several potentially interacting knobs (resource limits, timeouts, pool sizes, batch sizes, kernel or runtime parameters) and each measurement is expensive. DO NOT TRIGGER for finding the culprit behind a failure (use the taguchi or shrink skills), for a single knob (sweep it), or for measurements cheap enough to grid-search.
+argument-hint: "[knob=low/mid/high ... goal=minimize|maximize|target]"
+---
+
+Tuning is the taguchi skill pointed at optimization instead of blame: same arrays, same run sheets, but the outcome is a number to improve and the analysis picks the best level of every knob at once. One L9 pass over four 3-level knobs reads out all four response curves in 9 runs; one-knob-at-a-time needs 12 runs and still misses interactions.
+
+## Step 1 — design via the taguchi skill
+
+Use the taguchi skill's steps 1-4 for factor definition, array selection, and the run sheet, with two tuning-specific defaults:
+
+- Prefer 3 levels per knob — low, mid, high of the plausible range. Two levels see only a line; three see curvature, which is where optima live. L9 fits four 3-level knobs, L18 fits seven plus one binary.
+- Run every row 2+ times. Variance per row is data here, not noise to average away — the S/N analysis below needs it.
+
+## Step 2 — pick the S/N ratio for the goal
+
+Taguchi's signal-to-noise ratio folds "good on average" and "stable" into one number computed per row from its repeats y1..yn. Higher is always better:
+
+| Goal | S/N per row |
+| --- | --- |
+| Minimize (latency, RSS, cost) | −10·log10(mean(y²)) |
+| Maximize (throughput, hit rate) | −10·log10(mean(1/y²)) |
+| Hit a target (offset, utilization) | 10·log10(ȳ²/s²) |
+
+## Step 3 — main effects on S/N
+
+Exactly the taguchi skill's column-wise analysis, applied to S/N: for each knob, average the S/N over all rows at each level; the best level is the highest mean; Δ between best and worst level ranks how much each knob matters. Knobs with flat Δ are free — set them by cost or convenience.
+
+The predicted optimum is the combination of every knob's best level. It is usually not a row of the array — that is expected, the array sampled the space, the analysis extrapolated.
+
+## Step 4 — confirmation run, mandatory
+
+Run the predicted optimum. Matches or beats the best array row → done. Falls clearly short of the prediction → the additivity assumption broke, interactions dominate. On a 2-level array, fold the design over per the taguchi skill's step 7; on L9 or L18 fold-over de-aliases nothing (its guarantee is a 2-level construction), so run the full factorial on the two highest-Δ knobs, or re-center with a zoom round.
+
+## Step 5 — two refinements when it matters
+
+- **Variance first, mean second**: when the goal is a target value, first set the knobs that move S/N (stability), then steer onto the target with a knob that moves the mean but barely moves S/N. Chasing the mean first bakes the noise in.
+- **Zoom rounds for continuous knobs**: re-center the three levels around the winner with half the range and rerun the array. Iterate while the confirmation run keeps improving; two or three rounds usually land within measurement noise of the optimum.
