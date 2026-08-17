@@ -1,9 +1,0 @@
-{
-  "name": "taguchi",
-  "version": "1.1.0",
-  "description": "Plan a minimal set of debugging or testing runs with Taguchi orthogonal arrays — cover many candidate factors in few runs instead of one-change-at-a-time iteration, rank suspects by main effects, confirm the culprit",
-  "author": {
-    "name": "Aleksei Sviridkin",
-    "email": "f@lex.la"
-  }
-}

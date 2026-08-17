@@ -1,19 +1,25 @@
-# taguchi
+# doe
 
-Plan a minimal set of debugging or testing runs with Taguchi orthogonal arrays instead of changing one factor at a time. An orthogonal array covers every pair of factor levels in a handful of runs — 11 binary factors take 12 runs instead of 2048 — so any behavior driven by one factor or a two-factor interaction is guaranteed to appear in at least one run.
+Design-of-experiments skills for cutting debugging and tuning iterations. `taguchi` is the first method shipped; the plugin is the umbrella further experiment-design skills land under.
 
 ## Installation
 
 ```bash
 /plugin marketplace add lexfrei/ccc
-/plugin install taguchi@claude-code-companions
+/plugin install doe@claude-code-companions
 ```
+
+### Upgrading from taguchi
+
+This plugin was previously published as `taguchi`. The marketplace renames map migrates an installed copy automatically on Claude Code v2.1.193 or later; on older versions run `/plugin install doe@claude-code-companions` once. The skill invocation changed from `/taguchi:taguchi` to `/doe:taguchi`.
 
 ## Skills
 
 ### taguchi
 
-Invoked automatically when a debugging, tuning, or repro plan involves three or more independent candidate factors and each run is expensive (slow build, CI round-trip, flaky repro, hardware cycle). Also on explicit ask: `/taguchi`, "orthogonal array", "design of experiments", "reduce iterations".
+Plan a minimal set of debugging or testing runs with Taguchi orthogonal arrays. An orthogonal array covers every pair of factor levels in a handful of runs — 11 binary factors take 12 runs instead of 2048 — so any behavior driven by one factor or a two-factor interaction is guaranteed to appear in at least one run.
+
+Invoked automatically when a debugging, tuning, or repro plan involves three or more independent candidate factors and each run is expensive (slow build, CI round-trip, flaky repro, hardware cycle). Also on explicit ask: `/doe:taguchi`, "orthogonal array", "design of experiments", "reduce iterations".
 
 The workflow:
 
@@ -29,3 +35,5 @@ The workflow:
 ## Extending
 
 The embedded arrays (L4, L8, L9, L12, L18) are pairwise-balanced. To add a larger array (L16, L27, ...), verify it before embedding: for every pair of columns, every combination of levels must appear equally often. A one-off script that counts pair combinations across columns is enough — do not trust a table pasted from memory or from an unverified web page.
+
+New methods (pairwise covering arrays for arbitrary level mixes, group-testing shrink, S/N-ratio tuning) belong here as sibling skills under `skills/`, each with its own SKILL.md and a section in this README.
