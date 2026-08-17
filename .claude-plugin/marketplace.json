@@ -62,9 +62,9 @@
       "category": "productivity"
     },
     {
-      "name": "taguchi",
-      "description": "Plan a minimal set of debugging or testing runs with Taguchi orthogonal arrays — cover many candidate factors in few runs instead of one-change-at-a-time iteration, rank suspects by main effects, confirm the culprit",
-      "source": "./skills/taguchi",
+      "name": "doe",
+      "description": "Design-of-experiments toolkit for cutting debugging and tuning iterations: taguchi orthogonal arrays for factor isolation, pairwise covering arrays for arbitrary level mixes, group-testing shrink for single-culprit hunts, S/N-ratio tuning for knob optimization",
+      "source": "./skills/doe",
       "category": "development"
     },
     {
@@ -172,6 +172,7 @@
     "snake-charmer": "become",
     "tech-oracle": "become",
     "templ-weaver": "become",
-    "task-orchestrator": null
+    "task-orchestrator": null,
+    "taguchi": "doe"
   }
 }

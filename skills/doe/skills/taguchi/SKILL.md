@@ -15,7 +15,9 @@ Confirm all of these before proceeding; otherwise use the cheaper tool and say s
 - **3+ candidate factors.** One factor → plain bisection. Two factors → just run the 2×2 (4 runs).
 - **Runs are expensive.** If a run is seconds, brute-force the full factorial instead.
 - **Factors are independently settable.** If setting A=2 forces B=2, merge them into one factor.
-- **At most ~11 factors.** More than 11 means the suspect list was never narrowed — first do a split-half / group-testing pass to shrink it, then design the array for the survivors.
+- **At most ~11 factors** — that is the 2-level ceiling; 3-level factors cap out at 7 (plus one 2-level) in L18. More than that means the suspect list was never narrowed — shrink it first (the shrink skill in this plugin), then design the array for the survivors.
+
+Sibling skills cover the neighboring shapes: an expected single culprit among many boolean toggles → shrink; level counts that fit no array below → pairwise; optimizing knobs rather than hunting a culprit → tune.
 
 ## Step 1 — factors and levels
 
@@ -25,6 +27,7 @@ Build the factor table with the user (or from the debugging context). Force ever
 - Versions → current vs suspected-bad (2 levels), add a third only if a middle version genuinely discriminates.
 - Continuous values (timeout, batch size, memory limit) → the two extremes of the plausible range; a midpoint only as a third level.
 - A factor nobody can articulate a level for is not a factor — drop it or fix it at its current value.
+- A factor you can observe but not set (region, node shape, neighbor load) is a covariate, not a column: record its value for every run and check it during analysis (step 5).
 
 ## Step 2 — pick the array
 
@@ -38,7 +41,7 @@ Smallest array that fits all factors:
 | ≤11 × 2-level | L12 | 12 | 2048 |
 | 1 × 2-level + ≤7 × 3-level | L18 | 18 | 4374 |
 
-Mixed 2- and 3-level factors: take L18, and place each extra 2-level factor into a 3-level column by repeating level 1 as level 3 (dummy treatment — coverage holds, the repeated level just gets more runs). Extra columns beyond your factor count are simply left unassigned.
+Mixed 2- and 3-level factors: dummy treatment — a 2-level factor sits in a 3-level column with level 3 repeating level 1 (coverage holds, the repeated level just gets more runs). Up to 4 factors total fit L9 this way at 9 runs; bigger mixes take L18. Extra columns beyond your factor count are simply left unassigned. Level counts that fit none of these shapes (a 4-level factor, uneven mixes) → the pairwise skill generates a covering array for arbitrary levels.
 
 ## The arrays
 
@@ -139,12 +142,14 @@ Assign each factor to a column and render the plan with concrete values, not lev
 Execution notes:
 
 - Deterministic software: run in any order, once per row.
-- Flaky or nondeterministic bug: repeat the whole array N times rather than repeating single rows — repetition count per row stays balanced.
+- Flaky or nondeterministic bug: repeat the whole array N times rather than repeating single rows — repetition count per row stays balanced. Size N from the repro probability p observed on the known-bad config: N ≥ ln(0.05)/ln(1−p) gives 95% confidence that a guilty row fails at least once (p=0.5 → 5, p=0.3 → 9, p=0.1 → 29). Total cost is rows × N — when that number comes out absurd, the response is wrong, not the array: switch to a numeric outcome (step 4).
 - Environment that drifts between runs (hardware warm-up, cache state, quota): randomize run order so drift doesn't masquerade as a factor effect.
 
 ## Step 4 — record outcomes
 
 One outcome per run: binary (fail/pass) or numeric (latency, RSS, error count). For flaky repros with repeats, record the failure count per row.
+
+Prefer a numeric outcome over binary whenever one exists (latency, retry count, time-to-first-error): a continuous response discriminates levels in a single pass of the array, while a binary one pays the ×N repetition tax from step 3. Record the covariates from step 1 alongside the outcome of every run.
 
 ## Step 5 — main-effects analysis
 
@@ -156,11 +161,15 @@ For each factor, average the outcome over all runs at each level — the array's
 | Node | 1/2 fail | 1/2 fail | 0.00 |
 | Lockfile | 1/2 fail | 1/2 fail | 0.00 |
 
+With repeats, establish the noise floor before ranking: the typical spread between repeats of the same row. A Δ below that spread separates nothing — the factor stays unranked until more repeats say otherwise.
+
 Rank factors by Δ. Reading the verdict:
 
 - **Clean split** (one level holds all failures, the other none) → prime suspect.
 - **Δ ≈ 0** → factor is innocent at these levels — stop iterating on it.
 - **Two factors split cleanly at once, or all Δ are mid-range** → an interaction or a confound; go to step 7.
+
+Before believing a clean split, check the recorded covariates: one that tracks the outcome is both a suspect in its own right and a hole in the balance the array guarantees only for assigned columns. A covariate implicated this way graduates to a real factor — find a way to set it and rerun.
 
 ## Step 6 — confirmation run
 
@@ -173,4 +182,9 @@ If either run contradicts the prediction, the effect is an interaction — go to
 
 ## Step 7 — when effects are muddy
 
-Orthogonal arrays confound interactions with main effects — that is the price of the run savings. When the signal is not clean: take the two highest-Δ factors, run their full factorial (4 or 9 runs) with everything else fixed, and read the interaction directly. If that is still muddy, the factor list is missing the real variable — go back to step 1 rather than adding runs.
+Orthogonal arrays confound interactions with main effects — that is the price of the run savings. When the signal is not clean, two exits:
+
+- Two factors stand out → run their full factorial (4 or 9 runs) with everything else fixed and read the interaction directly.
+- Several factors look muddy at once on L8 or L12 → fold the design over: rerun the same array with the two levels swapped everywhere and analyze all 16 or 24 runs together. Main effects come out clean of every two-factor interaction, for double the runs.
+
+If it is still muddy after that, the factor list is missing the real variable — go back to step 1 rather than adding runs.
