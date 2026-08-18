@@ -70,24 +70,59 @@ def to_number(text):
         return None
 
 
-def read_outcomes(row, outcomes):
-    """Per-run repeats as numbers, or None for a binary run; blanks are skipped."""
+def read_outcomes(row, outcomes, numeric=None):
+    """Per-run repeats. In numeric mode a pass/fail word becomes None: the run
+    produced no measurement, which is data about the levels, not a number."""
     raw = [row[c] for c in outcomes if row[c] != ""]
     if not raw:
         return None
     numbers = [to_number(v) for v in raw]
-    if all(n is not None for n in numbers):
-        return numbers
-    binaries = []
-    for value in raw:
-        low = value.lower()
-        if low in FAIL_WORDS:
-            binaries.append(1.0)  # 1 == the bug fired
-        elif low in PASS_WORDS:
-            binaries.append(0.0)
+    if numeric is None:
+        numeric = all(n is not None for n in numbers)
+    values = []
+    for value, number in zip(raw, numbers):
+        if number is not None:
+            values.append(number)
+        elif value.lower() in FAIL_WORDS or value.lower() in PASS_WORDS:
+            values.append(None if numeric else (1.0 if value.lower() in FAIL_WORDS else 0.0))
         else:
             raise ValueError(f"outcome {value!r} is neither a number nor pass/fail")
-    return binaries
+    return values
+
+
+def censored_report(rows, factors, censored, n):
+    """Which levels the runs that produced no measurement are sitting on."""
+    lines = [
+        f"**{sum(censored)} of {n} runs produced no measurement** — they failed, "
+        "timed out or were disqualified. That is data, not a gap: the levels "
+        "they share are the ones driving the failure.\n",
+        "| Factor | failure rate per level | Δ | p |",
+        "| --- | --- | --- | --- |",
+    ]
+    scores = [1.0 if flag else 0.0 for flag in censored]
+    ranked = []
+    for factor in factors:
+        means = level_means(rows, factor, scores)
+        delta = max(means.values()) - min(means.values())
+        p_value = permutation_p(rows, factor, scores)
+        ranked.append((delta, factor))
+        cells = ", ".join(f"{lv}: {value:.2f}" for lv, value in means.items())
+        lines.append(f"| {factor} | {cells} | {delta:.3g} | {p_value:.3f} |")
+    ranked.sort(reverse=True)
+    lines.append("")
+    lines.append(
+        "Ranked by how strongly a level predicts failure: "
+        + ", ".join(f for _, f in ranked)
+        + "."
+    )
+    lines.append(
+        "The surviving rows are no longer a balanced array — dropping runs "
+        "breaks exactly the property the level means rely on — so read what "
+        "follows as a lead, and re-run a tightened array: pull the levels that "
+        "fail out of the ranges (a zoom round), rather than averaging around "
+        "the hole they left.\n"
+    )
+    return lines
 
 
 def signal_to_noise(values, goal, target=None):
@@ -181,15 +216,44 @@ def noise_floor(per_run):
 
 
 def analyze(rows, factors, outcomes, covariates, goal, target):
-    per_run = []
+    raw_runs = []
     for i, row in enumerate(rows, 1):
         values = read_outcomes(row, outcomes)
         if values is None:
             raise ValueError(f"run {i} has no outcome recorded — finish the array")
-        per_run.append(values)
+        raw_runs.append(values)
 
-    binary = all(set(v) <= {0.0, 1.0} for v in per_run)
+    numeric = any(
+        value is not None and value not in (0.0, 1.0)
+        for values in raw_runs
+        for value in values
+    ) or any(
+        to_number(row[column]) is not None
+        for row in rows
+        for column in outcomes
+        if row[column] != ""
+    )
+    if numeric:
+        raw_runs = [read_outcomes(row, outcomes, numeric=True) for row in rows]
+
+    censored = [any(value is None for value in values) for values in raw_runs]
     lines = []
+    n = len(rows)
+
+    if any(censored):
+        lines.extend(censored_report(rows, factors, censored, n))
+        if sum(censored) > n - 4:
+            lines.append(
+                "Too few rows measured anything for a main-effects pass on the "
+                "survivors. Tighten the levels and run the array again."
+            )
+            return "\n".join(lines)
+        keep = [i for i, flag in enumerate(censored) if not flag]
+        rows = [rows[i] for i in keep]
+        raw_runs = [[v for v in raw_runs[i] if v is not None] for i in keep]
+
+    per_run = raw_runs
+    binary = all(set(v) <= {0.0, 1.0} for v in per_run)
     n = len(rows)
 
     if binary:

@@ -130,6 +130,40 @@ def test_binary_outcome_comes_from_the_exit_code():
             assert row["results"] == [expected]
 
 
+def test_metric_missing_can_be_recorded_as_a_fail():
+    with tempfile.TemporaryDirectory() as store:
+        opened(store)
+        runner.main(
+            [
+                "flaky-lockfile",
+                "--cmd",
+                "echo lap={node}",
+                "--metric",
+                r"p95=([0-9.]+)",
+                "--metric-missing",
+                "fail",
+                "--store",
+                store,
+            ]
+        )
+        state = experiment.load("flaky-lockfile", store)
+        assert all(row["results"] == ["fail"] for row in state["runs"])
+
+
+def test_metric_missing_defaults_to_stopping():
+    with tempfile.TemporaryDirectory() as store:
+        opened(store)
+        try:
+            runner.main(
+                ["flaky-lockfile", "--cmd", "true", "--metric", r"p95=([0-9.]+)",
+                 "--store", store]
+            )
+        except ValueError as error:
+            assert "--metric-missing fail" in str(error)
+            return
+        raise AssertionError("silently accepted a run with no measurement")
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

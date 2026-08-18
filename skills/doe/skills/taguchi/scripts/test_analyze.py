@@ -116,6 +116,43 @@ def test_covariate_tracking_the_outcome_is_flagged():
     assert "hole in the balance" in report
 
 
+L9_ROWS = [
+    {"a": a, "b": b}
+    for a in ("1", "2", "3")
+    for b in ("1", "2", "3")
+]
+
+
+def test_censored_runs_are_reported_and_ranked():
+    rows = [
+        dict(row, result="fail" if row["a"] == "3" else "10")
+        for row in L9_ROWS
+    ]
+    report = analyze(rows, ["a", "b"], ["result"], [], "minimize", None)
+    assert "3 of 9 runs produced no measurement" in report
+    assert "Ranked by how strongly a level predicts failure: a" in report
+    # The survivors still get a main-effects pass, flagged as unbalanced.
+    assert "no longer a balanced array" in report
+    assert "S/N ratio per run" in report
+
+
+def test_mostly_censored_array_stops_before_the_means():
+    rows = [
+        dict(row, result="12" if row == L9_ROWS[0] else "fail")
+        for row in L9_ROWS
+    ]
+    report = analyze(rows, ["a", "b"], ["result"], [], "minimize", None)
+    assert "Too few rows measured anything" in report
+    assert "S/N ratio per run" not in report
+
+
+def test_pass_fail_only_array_stays_binary():
+    rows = [dict(row, result="fail" if row["a"] == "1" else "pass") for row in L9_ROWS]
+    report = analyze(rows, ["a", "b"], ["result"], [], None, None)
+    assert "Binary outcome: 3 of 9 runs failed" in report
+    assert "produced no measurement" not in report
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

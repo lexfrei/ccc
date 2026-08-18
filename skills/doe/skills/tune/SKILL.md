@@ -52,4 +52,5 @@ Run the predicted optimum. Matches or beats the best array row → done. Falls c
 ## Step 5 — two refinements when it matters
 
 - **Variance first, mean second**: when the goal is a target value, first set the knobs that move S/N (stability), then steer onto the target with a knob that moves the mean but barely moves S/N. Chasing the mean first bakes the noise in.
+- **A knob range wide enough to break the run is normal on the first pass**: rows that crash or time out come back as failures rather than numbers, and the first array's job is then to say which levels are unrunnable. Narrow to the survivable range and run the array again — that is a zoom round with a different reason.
 - **Zoom rounds for continuous knobs**: re-center the three levels around the winner with half the range and rerun the array. Iterate while the confirmation run keeps improving; two or three rounds usually land within measurement noise of the optimum.

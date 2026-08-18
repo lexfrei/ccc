@@ -193,6 +193,7 @@ It prints the table below, ranks the factors, scores each one with a permutation
 
 - **Nothing failed anywhere.** No listed factor drives the bug, the levels are not extreme enough, or the repro needs repeats. Back to step 1; another array will not help.
 - **Everything failed.** A factor outside the list drives it, or the level you called innocent is not. Re-check the baselines from step 3.
+- **Some rows produced no measurement at all** — crashed, timed out, disqualified — while others returned numbers. Those rows are data, not gaps: the levels they share are the ones driving the failure, and `analyze.py` ranks them that way before touching the survivors. But the survivors are no longer a balanced array, so the level means among them are a lead at best. Pull the failing levels out of the ranges and run a tightened array (`run.py --metric-missing fail` records such a row instead of stopping).
 
 For each factor, average the outcome over all runs at each level — the array's balance guarantees every other factor contributed equally to both sides:
 

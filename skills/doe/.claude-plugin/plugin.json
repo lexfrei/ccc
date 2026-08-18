@@ -1,6 +1,6 @@
 {
   "name": "doe",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Design-of-experiments toolkit for cutting debugging and tuning iterations: taguchi orthogonal arrays for factor isolation, pairwise covering arrays for arbitrary level mixes, group-testing shrink for single-culprit hunts, S/N-ratio tuning for knob optimization",
   "author": {
     "name": "Aleksei Sviridkin",

@@ -96,6 +96,12 @@ def main(argv):
     parser.add_argument("--store", default=experiment.STORE)
     parser.add_argument("--repeats", type=int, help="sweeps of the whole array")
     parser.add_argument("--metric", help="regex whose first group is the numeric outcome")
+    parser.add_argument(
+        "--metric-missing",
+        choices=["error", "fail"],
+        default="error",
+        help="no match for --metric: stop (default), or record the run as a fail",
+    )
     parser.add_argument("--randomize", action="store_true", help="shuffle order per sweep")
     parser.add_argument("--seed", type=int, help="fix the shuffle for reproducibility")
     parser.add_argument("--timeout", type=float, help="seconds per run; a timeout is a fail")
@@ -144,12 +150,13 @@ def main(argv):
             code, output = execute(command, opts.shell, opts.timeout, log_path)
             if opts.metric:
                 value = extract(opts.metric, output)
-                if value is None:
+                if value is None and opts.metric_missing == "error":
                     raise ValueError(
                         f"{label}: --metric matched nothing in the output — see "
-                        f"{log_path}"
+                        f"{log_path}. A run that legitimately produces no "
+                        "measurement is data: pass --metric-missing fail."
                     )
-                result = f"{value:g}"
+                result = "fail" if value is None else f"{value:g}"
             else:
                 result = "pass" if code == 0 else "fail"
             state = experiment.record(
