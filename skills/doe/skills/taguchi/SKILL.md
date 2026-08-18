@@ -147,7 +147,26 @@ Assign each factor to a column and render the plan with concrete values, not lev
 | 3 | macos | 18 | fresh | |
 | 4 | macos | 20 | frozen | |
 
-**Two baseline runs before the array, always.** All factors at their known-good levels must pass; all at their suspected-bad levels must fail. A failing good-baseline means the difference lives outside the factor list; a passing bad-baseline means the levels are not extreme enough or the repro needs repeats. Either way the array is about to be spent on a phantom — the shrink skill makes the same two runs mandatory for the same reason, and an array costs more than a bisection does.
+Open the journal before the first run. An array is 8-18 CI round-trips — hours or days, and more than one session; a plan that lives only in the chat is gone by the time the last row lands:
+
+```bash
+python3 scripts/experiment.py new "flaky lockfile" \
+    --factor "os=ubuntu,macos" --factor "node=18,20" --factor "cache=warm,cold" \
+    --repeats 2 --hypothesis "the fresh lockfile only breaks on node 18"
+```
+
+It designs the array, writes `.doe/<slug>.json`, and prints the sheet. `show` re-prints the state and what is still open, `record <slug> --run 3 --result fail --covariate region=eu` files an outcome, `csv <slug>` emits the file `analyze.py` reads, `close <slug> --verdict ...` ends it. **A session that finds an open experiment resumes it instead of designing a new one** — `experiment.py list`.
+
+When a run is a command rather than a human errand, execute the sheet instead of shepherding it:
+
+```bash
+python3 scripts/run.py flaky-lockfile --cmd 'make test OS={os} NODE={node} CACHE={cache}'
+python3 scripts/run.py latency --cmd './bench --pool {pool}' --metric 'p95=([0-9.]+)' --randomize
+```
+
+Exit code is the outcome unless `--metric` names a regex whose first group is a number. Repeats sweep the whole array rather than one row at a time, `--randomize` shuffles each sweep against environment drift, every result is written to the journal the moment it lands, and each run's output is kept under `.doe/<slug>-logs/`.
+
+**Two baseline runs before the array, always.** All factors at their known-good levels must pass; all at their suspected-bad levels must fail. A failing good-baseline means the difference lives outside the factor list; a passing bad-baseline means the levels are not extreme enough or the repro needs repeats. Either way the array is about to be spent on a phantom — the shrink skill makes the same two runs mandatory for the same reason, and an array costs more than a bisection does. Record them with `experiment.py baseline <slug> --good pass --bad fail`; `run.py` refuses to execute a sheet whose baselines are missing.
 
 Execution notes:
 
@@ -163,9 +182,10 @@ Prefer a numeric outcome over binary whenever one exists (latency, retry count, 
 
 ## Step 5 — main-effects analysis
 
-Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns:
+Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns. `experiment.py csv` emits exactly that shape:
 
 ```bash
+python3 scripts/experiment.py csv flaky-lockfile > results.csv
 python3 scripts/analyze.py results.csv --covariate region
 ```
 

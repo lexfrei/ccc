@@ -15,6 +15,8 @@ Use the taguchi skill's steps 1-4 for factor definition, array selection, and th
 
 Generate the sheet with the taguchi skill's `scripts/design.py` (`../taguchi/scripts/design.py` from here) — the array, the columns and the dummy treatment are mechanical, and a hand-built sheet is where a silent transcription error enters.
 
+Keep it in the journal (`../taguchi/scripts/experiment.py new ... --repeats 3`) and let `../taguchi/scripts/run.py` execute the sheet — a benchmark is a command, so the array is one invocation with `--metric 'p95=([0-9.]+)'` instead of a dozen hand-run measurements, and the per-row repeats the S/N ratio needs come out balanced.
+
 Measure the current configuration first, before the array. It is the reference every S/N number is judged against, and it is the cheapest check that the measurement harness reports what you think it does.
 
 ## Step 2 — pick the S/N ratio for the goal
@@ -34,6 +36,7 @@ Exactly the taguchi skill's column-wise analysis, applied to S/N: for each knob,
 Do not compute decibels by hand. The taguchi skill's `scripts/analyze.py` takes the goal and does the whole pass — per-row S/N, level means, ranking, the permutation p that says which Δ is noise, and the predicted optimum:
 
 ```bash
+python3 ../taguchi/scripts/experiment.py csv latency > results.csv
 python3 ../taguchi/scripts/analyze.py results.csv --goal minimize
 python3 ../taguchi/scripts/analyze.py results.csv --goal target=200
 ```
