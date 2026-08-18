@@ -79,6 +79,11 @@ def select(factors, forced=None):
         placement = assign(factors, name)
         if placement:
             return name, placement
+    if forced:
+        raise ValueError(
+            f"{forced} has no room for these factors — drop --array and the "
+            "smallest one that fits is picked for you"
+        )
     raise ValueError(
         "no array below L18 fits these factors — shrink the suspect list first "
         "(the shrink skill), or split the factors across two experiments"
