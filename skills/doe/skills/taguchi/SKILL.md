@@ -182,7 +182,7 @@ Prefer a numeric outcome over binary whenever one exists (latency, retry count, 
 
 ## Step 5 — main-effects analysis
 
-Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns. `experiment.py csv` emits exactly that shape:
+Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns. `experiment.py csv` emits exactly that shape. A binary outcome may be spelled `pass`/`fail`, `ok`/`bad`, `true`/`false` or `1`/`0` — the digits are the booleans, so `0` is a failure in every spelling, and a sheet mixing spellings reads the same either way:
 
 ```bash
 python3 scripts/experiment.py csv flaky-lockfile > results.csv

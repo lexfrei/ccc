@@ -153,6 +153,97 @@ def test_pass_fail_only_array_stays_binary():
     assert "produced no measurement" not in report
 
 
+
+def test_zero_one_reads_the_same_as_pass_fail():
+    """The same experiment written twice has to accuse the same level."""
+    words = analyze(
+        rows_with(["pass", "pass", "fail", "fail"]), FACTORS, ["result"], [], None, None
+    )
+    digits = analyze(
+        rows_with(["1", "1", "0", "0"]), FACTORS, ["result"], [], None, None
+    )
+    assert "os=macos" in words
+    assert words == digits
+
+
+def test_binary_outcome_gets_no_optimum_from_a_goal():
+    report = analyze(
+        rows_with(["pass", "pass", "fail", "fail"]),
+        FACTORS,
+        ["result"],
+        [],
+        "minimize",
+        None,
+    )
+    assert "Predicted optimum" not in report
+    assert "os=macos" in report
+    assert "accusation run" in report
+    everything = analyze(
+        rows_with(["fail"] * 4), FACTORS, ["result"], [], "minimize", None
+    )
+    assert "Everything failed" in everything
+    assert "Predicted optimum" not in everything
+
+
+# `a` moves the mean and nothing else: its spread scales with its own level, so
+# every run has the same S/N and only `b` ranks on stability. That is the sheet
+# the two-step exists for — the S/N table cannot tell the three `a` levels apart.
+TARGET_SHEET = [
+    {
+        "a": a,
+        "b": b,
+        "y1": f"{float(a) * (1 - k):g}",
+        "y2": f"{float(a) * (1 + k):g}",
+    }
+    for a in ("100", "200", "300")
+    for b, k in (("tight", 0.001), ("loose", 0.01), ("wild", 0.05))
+]
+
+
+def test_target_goal_steers_onto_the_target():
+    low = analyze(TARGET_SHEET, ["a", "b"], ["y1", "y2"], [], "target", 100.0)
+    high = analyze(TARGET_SHEET, ["a", "b"], ["y1", "y2"], [], "target", 300.0)
+    assert "Two-step answer for target=100" in low
+    assert "Predicted optimum: a=100" in low
+    assert "Predicted optimum: a=300" in high
+    # Step one is the stability factor, step two the knob that is flat on S/N.
+    assert "1. Stability: b=tight" in low
+    assert "2. Steering: a=100" in low
+    assert "predicted mean 100 against a target of 100" in low
+
+
+def test_target_outside_the_measured_range_is_flagged():
+    report = analyze(TARGET_SHEET, ["a", "b"], ["y1", "y2"], [], "target", 900.0)
+    assert "outside the range this array measured" in report
+
+
+def test_target_without_a_value_is_refused():
+    try:
+        analyze(TARGET_SHEET, ["a", "b"], ["y1", "y2"], [], "target", None)
+    except ValueError:
+        return
+    raise AssertionError("analyzed a target sheet with no target to steer onto")
+
+
+def test_table_widens_for_a_four_level_factor():
+    rows = [
+        {"pool": pool, "gc": gc, "result": result}
+        for pool, gc, result in zip("1234", "abab", ("10", "20", "30", "40"))
+    ]
+    report = analyze(rows, ["pool", "gc"], ["result"], [], None, None)
+    table = [line for line in report.splitlines() if line.startswith("| ")]
+    assert "level 4" in table[0]
+    assert len({line.count("|") for line in table}) == 1
+
+
+def test_pipes_in_levels_do_not_break_the_table():
+    rows = [
+        {"filter": "a|b", "result": "10"},
+        {"filter": "c", "result": "20"},
+    ]
+    assert r"a\|b" in analyze(rows, ["filter"], ["result"], [], None, None)
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

@@ -45,6 +45,10 @@ One CSV row per array row, repeats in `y1..yn` columns — the repeats are what 
 
 The predicted optimum is the combination of every knob's best level. It is usually not a row of the array — that is expected, the array sampled the space, the analysis extrapolated.
 
+`--goal target=VALUE` does not rank on S/N alone: the nominal-the-best ratio scores stability and is blind to the value you are aiming at, so ranking by it recommends the most stable knob setting regardless of where the mean lands. The script prints step 5's two-step answer instead — stability knobs at their highest-S/N level, the knobs flat on S/N set to land the mean on the target, and the predicted mean printed next to the target so the miss is visible.
+
+A pass/fail sheet has no S/N at all. `analyze.py` says so and reads it as blame rather than optimization: the best level of a failure-rate table is the level holding the failures, which is a recommendation pointing exactly backwards.
+
 ## Step 4 — confirmation run, mandatory
 
 Run the predicted optimum. Matches or beats the best array row → done. Falls clearly short of the prediction → the additivity assumption broke, interactions dominate. On a 2-level array, fold the design over per the taguchi skill's step 7; on L9 or L18 fold-over de-aliases nothing (its guarantee is a 2-level construction), so run the full factorial on the two highest-Δ knobs, or re-center with a zoom round.
