@@ -164,6 +164,41 @@ def test_metric_missing_defaults_to_stopping():
         raise AssertionError("silently accepted a run with no measurement")
 
 
+def test_resume_tops_up_every_row_to_the_repeat_count():
+    """The reason repeats sweep the whole array is a balanced repetition count;
+    a resumed sheet used to re-run the full count on top of what it already
+    held, which unbalances exactly that."""
+    with tempfile.TemporaryDirectory() as store:
+        state = opened(store, repeats=3)
+        experiment.record(state, 1, ["pass"], [])
+        experiment.record(state, 2, ["pass"], [])
+        experiment.save(state, store)
+        runner.main(["flaky-lockfile", "--cmd", "true", "--store", store])
+        state = experiment.load("flaky-lockfile", store)
+        assert [len(row["results"]) for row in state["runs"]] == [3, 3, 3, 3]
+        assert experiment.outstanding(state) == []
+
+
+def test_repeats_flag_tops_a_finished_sheet_up():
+    with tempfile.TemporaryDirectory() as store:
+        opened(store, repeats=1)
+        runner.main(["flaky-lockfile", "--cmd", "true", "--store", store])
+        runner.main(
+            ["flaky-lockfile", "--cmd", "true", "--store", store, "--repeats", "2"]
+        )
+        state = experiment.load("flaky-lockfile", store)
+        assert [len(row["results"]) for row in state["runs"]] == [2, 2, 2, 2]
+
+
+def test_redo_replaces_rather_than_adds():
+    with tempfile.TemporaryDirectory() as store:
+        opened(store, repeats=2)
+        runner.main(["flaky-lockfile", "--cmd", "true", "--store", store])
+        runner.main(["flaky-lockfile", "--cmd", "true", "--store", store, "--redo"])
+        state = experiment.load("flaky-lockfile", store)
+        assert [len(row["results"]) for row in state["runs"]] == [2, 2, 2, 2]
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

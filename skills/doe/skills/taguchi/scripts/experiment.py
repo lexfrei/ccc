@@ -18,6 +18,8 @@ last row finishes.
 """
 
 import argparse
+import csv
+import io
 import json
 import os
 import re
@@ -60,6 +62,8 @@ def now():
 
 
 def create(title, specs, hypothesis, repeats, array, store=STORE):
+    if repeats < 1:
+        raise ValueError("--repeats is runs per row: 1 or more, not 0")
     factors = parse_spec(specs)
     name, placement = select(factors, array)
     runs = build(factors, name, placement)
@@ -91,12 +95,12 @@ def create(title, specs, hypothesis, repeats, array, store=STORE):
     return state
 
 
-def outstanding(state):
-    return [
-        run["run"]
-        for run in state["runs"]
-        if len(run["results"]) < max(1, state.get("repeats", 1))
-    ]
+def outstanding(state, repeats=None):
+    """Rows that still owe results. `repeats` overrides the journal's own count,
+    so `run.py --repeats N` tops a half-filled sheet up to N instead of asking
+    the journal how many it once wanted."""
+    target = max(1, state.get("repeats", 1) if repeats is None else repeats)
+    return [run["run"] for run in state["runs"] if len(run["results"]) < target]
 
 
 def describe(state):
@@ -169,22 +173,28 @@ def record(state, run_index, results, covariates, replace=False):
 
 def to_csv(state):
     names = list(state["factors"])
-    covariates = sorted(
-        {key for run in state["runs"] for key in run["covariates"]}
-    )
+    covariates = covariate_names(state)
     width = max([len(run["results"]) for run in state["runs"]] + [1])
     header = ["run"] + names + [f"result_{i}" for i in range(1, width + 1)] + covariates
-    rows = [",".join(header)]
+    # csv.writer, not ",".join: a level or a covariate holding a comma, a quote
+    # or a newline would otherwise emit a row wider than its header, and
+    # analyze.py reads the shifted columns as data.
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+    writer.writerow(header)
     for run in state["runs"]:
         results = [str(r) for r in run["results"]] + [""] * (width - len(run["results"]))
-        cells = (
+        writer.writerow(
             [str(run["run"])]
             + [run["values"][n] for n in names]
             + results
             + [run["covariates"].get(c, "") for c in covariates]
         )
-        rows.append(",".join(cells))
-    return "\n".join(rows)
+    return buffer.getvalue().rstrip("\n")
+
+
+def covariate_names(state):
+    return sorted({key for run in state["runs"] for key in run["covariates"]})
 
 
 def listing(store=STORE):
@@ -273,7 +283,19 @@ def main(argv):
         save(state, store)
         print(describe(state))
     elif opts.command == "csv":
-        print(to_csv(load(opts.slug, store)))
+        state = load(opts.slug, store)
+        print(to_csv(state))
+        names = covariate_names(state)
+        if names:
+            # The journal knows which columns are covariates; the CSV cannot say
+            # so, and analyze.py reads an unnamed column as a factor.
+            print(
+                "note: covariate column(s) "
+                + ", ".join(names)
+                + " — pass them to analyze.py as "
+                + " ".join(f"--covariate {n}" for n in names),
+                file=sys.stderr,
+            )
     elif opts.command == "close":
         state = load(opts.slug, store)
         state["status"] = "closed"

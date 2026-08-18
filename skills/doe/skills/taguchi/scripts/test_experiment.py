@@ -1,5 +1,6 @@
 """Runnable with pytest or directly: python3 test_experiment.py"""
 
+import csv
 import tempfile
 
 import experiment
@@ -117,6 +118,32 @@ def test_missing_experiment_is_a_clear_error():
             assert "no experiment" in str(error)
             return
         raise AssertionError("loaded an experiment that does not exist")
+
+
+def test_csv_quotes_a_value_holding_a_comma():
+    with tempfile.TemporaryDirectory() as store:
+        state = fresh(store)
+        record(state, 1, ["fail"], ["region=eu,west"])
+        rows = list(csv.reader(to_csv(state).splitlines()))
+        assert len({len(row) for row in rows}) == 1
+        assert rows[1][-1] == "eu,west"
+
+
+def test_repeats_below_one_is_refused():
+    with tempfile.TemporaryDirectory() as store:
+        try:
+            create("zero repeats", FACTORS, "", 0, None, store)
+        except ValueError:
+            return
+        raise AssertionError("opened an experiment no row can ever finish")
+
+
+def test_outstanding_takes_a_repeat_override():
+    with tempfile.TemporaryDirectory() as store:
+        state = fresh(store)
+        record(state, 1, ["pass"], [])
+        assert outstanding(state) == [2, 3, 4]
+        assert outstanding(state, 2) == [1, 2, 3, 4]
 
 
 if __name__ == "__main__":

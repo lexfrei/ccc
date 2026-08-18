@@ -77,7 +77,7 @@ def execute(command, use_shell, timeout, log_path):
     return code, output
 
 
-def pending(state, only, redo):
+def pending(state, only, redo, repeats=None):
     runs = [run["run"] for run in state["runs"]]
     if only:
         unknown = [i for i in only if i not in runs]
@@ -86,7 +86,7 @@ def pending(state, only, redo):
         return list(only)
     if redo:
         return runs
-    return experiment.outstanding(state)
+    return experiment.outstanding(state, repeats)
 
 
 def main(argv):
@@ -120,8 +120,8 @@ def main(argv):
             f"(`experiment.py baseline {opts.slug} --good ... --bad ...`)"
         )
 
-    sweeps = opts.repeats or state.get("repeats", 1)
-    order = pending(state, opts.only, opts.redo)
+    repeats = max(1, opts.repeats or state.get("repeats", 1))
+    order = pending(state, opts.only, opts.redo, repeats)
     if not order:
         print("nothing left to run — every row has its results")
         return
@@ -133,14 +133,22 @@ def main(argv):
 
     rnd = random.Random(opts.seed)
     by_index = {run["run"]: run for run in state["runs"]}
-    for sweep in range(1, sweeps + 1):
-        sequence = list(order)
+    # What a row still owes, not what the sheet asks for as a whole: a resumed
+    # array holds results already, and running the full count for every
+    # selected row again is what unbalances the repetition count the whole-array
+    # sweep exists to keep even.
+    done = {run["run"]: len(run["results"]) for run in state["runs"]}
+    for sweep in range(1, repeats + 1):
+        sequence = [index for index in order if done[index] < sweep]
+        if not sequence:
+            continue
         if opts.randomize:
             rnd.shuffle(sequence)
         for index in sequence:
+            done[index] += 1
             values = by_index[index]["values"]
             command = substitute(opts.cmd, values, opts.shell)
-            label = f"sweep {sweep}/{sweeps} run {index}"
+            label = f"sweep {sweep}/{repeats} run {index}"
             if opts.dry_run:
                 print(f"{label}: {command}")
                 continue
