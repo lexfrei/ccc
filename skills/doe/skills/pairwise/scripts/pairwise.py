@@ -240,4 +240,8 @@ def main(argv):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    try:
+        main(sys.argv[1:])
+    except (ValueError, AssertionError) as error:
+        print(f"error: {error}", file=sys.stderr)
+        raise SystemExit(2)
