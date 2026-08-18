@@ -20,7 +20,18 @@ Run the bundled generator (relative to this skill's base directory):
 python3 scripts/pairwise.py "net=fast,slow,flaky,off" "browser=chrome,firefox,safari" "os=linux,macos"
 ```
 
-It prints a markdown run sheet plus the run count against the full factorial. The output is self-verified: the script crashes rather than print an array with an uncovered pair. Present the sheet with concrete values and execute like the taguchi skill's run plan (randomize order under environment drift; for flaky bugs repeat the whole array N times, N ≥ ln(0.05)/ln(1−p) from the observed repro probability p).
+It prints a markdown run sheet plus the run count against the full factorial. The output is self-verified: the script crashes rather than print an array with an uncovered pair. It restarts the greedy search from 64 seeds and keeps the shortest array — the seeds cost milliseconds, the runs they save cost CI round-trips (`--restarts` trades one for the other, `--json` emits the rows for a driver script).
+
+**Combinations that cannot be run go in as constraints, not as rows you quietly skip.** Safari does not run on Linux; version X does not build against Y. Dropping such a row by hand takes its pairs down with it and the coverage guarantee is gone without a word:
+
+```bash
+python3 scripts/pairwise.py "browser=chrome,firefox,safari" "os=linux,macos" "net=fast,slow" \
+    --exclude "browser=safari & os=linux"
+```
+
+Excluded rows are never generated, pairs that no legal row can contain leave the target set, and everything still reachable stays covered.
+
+Present the sheet with concrete values and execute like the taguchi skill's run plan (randomize order under environment drift; for flaky bugs repeat the whole array N times, N ≥ ln(0.05)/ln(1−p) from the observed repro probability p).
 
 ## Step 3 — analyze by failure pattern, not by means
 

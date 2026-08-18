@@ -13,6 +13,10 @@ Use the taguchi skill's steps 1-4 for factor definition, array selection, and th
 - Prefer 3 levels per knob — low, mid, high of the plausible range. Two levels see only a line; three see curvature, which is where optima live. L9 fits four 3-level knobs, L18 fits seven plus one binary.
 - Run every row 2+ times. Variance per row is data here, not noise to average away — the S/N analysis below needs it.
 
+Generate the sheet with the taguchi skill's `scripts/design.py` (`../taguchi/scripts/design.py` from here) — the array, the columns and the dummy treatment are mechanical, and a hand-built sheet is where a silent transcription error enters.
+
+Measure the current configuration first, before the array. It is the reference every S/N number is judged against, and it is the cheapest check that the measurement harness reports what you think it does.
+
 ## Step 2 — pick the S/N ratio for the goal
 
 Taguchi's signal-to-noise ratio folds "good on average" and "stable" into one number computed per row from its repeats y1..yn. Higher is always better:
@@ -26,6 +30,15 @@ Taguchi's signal-to-noise ratio folds "good on average" and "stable" into one nu
 ## Step 3 — main effects on S/N
 
 Exactly the taguchi skill's column-wise analysis, applied to S/N: for each knob, average the S/N over all rows at each level; the best level is the highest mean; Δ between best and worst level ranks how much each knob matters. Knobs with flat Δ are free — set them by cost or convenience.
+
+Do not compute decibels by hand. The taguchi skill's `scripts/analyze.py` takes the goal and does the whole pass — per-row S/N, level means, ranking, the permutation p that says which Δ is noise, and the predicted optimum:
+
+```bash
+python3 ../taguchi/scripts/analyze.py results.csv --goal minimize
+python3 ../taguchi/scripts/analyze.py results.csv --goal target=200
+```
+
+One CSV row per array row, repeats in `y1..yn` columns — the repeats are what the S/N ratio is computed from, so a single-column sheet only supports minimize and maximize.
 
 The predicted optimum is the combination of every knob's best level. It is usually not a row of the array — that is expected, the array sampled the space, the analysis extrapolated.
 
