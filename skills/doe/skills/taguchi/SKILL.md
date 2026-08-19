@@ -16,6 +16,7 @@ Confirm all of these before proceeding; otherwise use the cheaper tool and say s
 - **Runs are expensive.** If a run is seconds, brute-force the full factorial instead.
 - **Factors are independently settable.** If setting A=2 forces B=2, merge them into one factor.
 - **At most ~11 factors** — that is the 2-level ceiling; 3-level factors cap out at 7 (plus one 2-level) in L18. More than that means the suspect list was never narrowed — shrink it first (the shrink skill in this plugin), then design the array for the survivors.
+- **The array has to be meaningfully cheaper than the factorial.** Three 2-level factors are 4 runs against 8 — a 2x saving that does not pay for the ceremony or for confounding interactions. Below roughly 3x, run the factorial and read the interactions directly; `design.py` prints the ratio and says so.
 
 Sibling skills cover the neighboring shapes: an expected single culprit among many boolean toggles → shrink; level counts that fit no array below → pairwise; optimizing knobs rather than hunting a culprit → tune.
 
@@ -41,11 +42,18 @@ Smallest array that fits all factors:
 | ≤11 × 2-level | L12 | 12 | 2048 |
 | 1 × 2-level + ≤7 × 3-level | L18 | 18 | 4374 |
 
-Mixed 2- and 3-level factors: dummy treatment — a 2-level factor sits in a 3-level column with level 3 repeating level 1 (coverage holds, the repeated level just gets more runs). Up to 4 factors total fit L9 this way at 9 runs; bigger mixes take L18. Extra columns beyond your factor count are simply left unassigned. Level counts that fit none of these shapes (a 4-level factor, uneven mixes) → the pairwise skill generates a covering array for arbitrary levels.
+Mixed 2- and 3-level factors: dummy treatment — a 2-level factor sits in a 3-level column with level 3 repeating level 1 (coverage holds, the repeated level just gets more runs). Its level means stay unbiased but rest on unequal run counts, so its Δ is noisier than the rest of the table — rank a dummy-treated factor against the others only when its effect clears the noise floor by a margin. Up to 4 factors total fit L9 this way at 9 runs; bigger mixes take L18. Extra columns beyond your factor count are simply left unassigned. Level counts that fit none of these shapes (a 4-level factor, uneven mixes) → the pairwise skill generates a covering array for arbitrary levels.
+
+Do not assemble the sheet by hand. `scripts/design.py` picks the array, assigns the columns, applies the dummy treatment and prints the run sheet with concrete values:
+
+```bash
+python3 scripts/design.py "os=ubuntu,macos" "node=18,20" "lockfile=frozen,fresh"
+python3 scripts/design.py "gc=on,off" "pool=8,16,32" "batch=1,10,100" --json
+```
 
 ## The arrays
 
-These tables are pairwise-balanced (verified): every pair of columns contains each level combination equally often. Copy rows exactly — a transposed digit silently destroys the balance the analysis relies on.
+These tables are pairwise-balanced, and `scripts/arrays.py` re-checks that at import — a transposed digit raises instead of silently destroying the balance the analysis relies on. They are printed here to be read, not to be retyped: transcribing an L12 by hand is exactly the step the script exists to remove.
 
 ### L4 (3 factors × 2 levels, 4 runs)
 
@@ -139,6 +147,27 @@ Assign each factor to a column and render the plan with concrete values, not lev
 | 3 | macos | 18 | fresh | |
 | 4 | macos | 20 | frozen | |
 
+Open the journal before the first run. An array is 8-18 CI round-trips — hours or days, and more than one session; a plan that lives only in the chat is gone by the time the last row lands:
+
+```bash
+python3 scripts/experiment.py new "flaky lockfile" \
+    --factor "os=ubuntu,macos" --factor "node=18,20" --factor "cache=warm,cold" \
+    --repeats 2 --hypothesis "the fresh lockfile only breaks on node 18"
+```
+
+It designs the array, writes `.doe/<slug>.json`, and prints the sheet. `show` re-prints the state and what is still open, `record <slug> --run 3 --result fail --covariate region=eu` files an outcome, `csv <slug>` emits the file `analyze.py` reads, `close <slug> --verdict ...` ends it. **A session that finds an open experiment resumes it instead of designing a new one** — `experiment.py list`.
+
+When a run is a command rather than a human errand, execute the sheet instead of shepherding it:
+
+```bash
+python3 scripts/run.py flaky-lockfile --cmd 'make test OS={os} NODE={node} CACHE={cache}'
+python3 scripts/run.py latency --cmd './bench --pool {pool}' --metric 'p95=([0-9.]+)' --randomize
+```
+
+Exit code is the outcome unless `--metric` names a regex whose first group is a number. Repeats sweep the whole array rather than one row at a time, `--randomize` shuffles each sweep against environment drift, every result is written to the journal the moment it lands, and each run's output is kept under `.doe/<slug>-logs/`.
+
+**Two baseline runs before the array, always.** All factors at their known-good levels must pass; all at their suspected-bad levels must fail. A failing good-baseline means the difference lives outside the factor list; a passing bad-baseline means the levels are not extreme enough or the repro needs repeats. Either way the array is about to be spent on a phantom — the shrink skill makes the same two runs mandatory for the same reason, and an array costs more than a bisection does. Record them with `experiment.py baseline <slug> --good pass --bad fail`; `run.py` refuses to execute a sheet whose baselines are missing.
+
 Execution notes:
 
 - Deterministic software: run in any order, once per row.
@@ -153,6 +182,19 @@ Prefer a numeric outcome over binary whenever one exists (latency, retry count, 
 
 ## Step 5 — main-effects analysis
 
+Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns, prefixed `cov_` so they are never ranked as factors. `experiment.py csv` emits exactly that shape. A binary outcome may be spelled `pass`/`fail`, `ok`/`bad`, `true`/`false` or `1`/`0` — the digits are the booleans, so `0` is a failure in every spelling, and a sheet mixing spellings reads the same either way. A measurement that happens to take only the values 0 and 1 (an error count, say) is indistinguishable from that, so pass `--outcome-type numeric` when the zeros are the good runs. `cov_` is reserved: a factor cannot be named with it, because the results CSV reads that prefix as a covariate:
+
+```bash
+python3 scripts/experiment.py csv flaky-lockfile > results.csv
+python3 scripts/analyze.py results.csv --covariate region
+```
+
+It prints the table below, ranks the factors, scores each one with a permutation test, computes the noise floor from the repeats, and flags the two outcomes that end the experiment early:
+
+- **Nothing failed anywhere.** No listed factor drives the bug, the levels are not extreme enough, or the repro needs repeats. Back to step 1; another array will not help.
+- **Everything failed.** A factor outside the list drives it, or the level you called innocent is not. Re-check the baselines from step 3.
+- **Some rows produced no measurement at all** — crashed, timed out, disqualified — while others returned numbers. Those rows are data, not gaps: the levels they share are the ones driving the failure, and `analyze.py` ranks them that way before touching the survivors. But the survivors are no longer a balanced array, so the level means among them are a lead at best. Pull the failing levels out of the ranges and run a tightened array (`run.py --metric-missing fail` records such a row instead of stopping).
+
 For each factor, average the outcome over all runs at each level — the array's balance guarantees every other factor contributed equally to both sides:
 
 | Factor | Level 1 mean | Level 2 mean | Effect (Δ) |
@@ -165,7 +207,7 @@ With repeats, establish the noise floor before ranking: the typical spread betwe
 
 Rank factors by Δ. Reading the verdict:
 
-- **Clean split** (one level holds all failures, the other none) → prime suspect.
+- **Clean split** (one level holds all failures, the other none) → prime suspect, but score it before believing it. With few failures spread over few runs, clean splits happen by luck: two failures in an L4 always split some factor cleanly, and 11 factors on an L12 with three failures produce about two innocent clean splits per array. `analyze.py` prints that expectation next to a permutation p per factor — use them to rank suspects, never to convict one.
 - **Δ ≈ 0** → factor is innocent at these levels — stop iterating on it.
 - **Two factors split cleanly at once, or all Δ are mid-range** → an interaction or a confound; go to step 7.
 
