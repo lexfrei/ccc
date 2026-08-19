@@ -244,6 +244,18 @@ def test_pipes_in_levels_do_not_break_the_table():
     assert r"a\|b" in analyze(rows, ["filter"], ["result"], [], None, None)
 
 
+def test_large_means_print_as_numbers_not_exponents():
+    """1002 ms is a lap time; 1e+03 is a number nobody can act on."""
+    rows = [
+        {"pool": pool, "batch": str(i), "y1": str(base), "y2": str(base + 4)}
+        for pool, base in (("8", 200.0), ("16", 1000.0))
+        for i in (0, 1)
+    ]
+    report = analyze(rows, ["pool", "batch"], ["y1", "y2"], [], "target", 1000.0)
+    assert "predicted mean 1002" in report
+    assert "1e+03" not in report
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

@@ -331,8 +331,8 @@ def steer_to_target(rows, factors, ranked, per_run, target):
         "stability; set to land on the target.\n",
         "Predicted optimum: "
         + ", ".join(f"{f}={choice[f]}" for f in factors)
-        + f" — predicted mean {predicted:.3g} against a target of {target:g} "
-        f"(miss {miss:.3g}). It is usually not a row of the array — the array "
+        + f" — predicted mean {predicted:.6g} against a target of {target:g} "
+        f"(miss {miss:.6g}). It is usually not a row of the array — the array "
         "sampled, the analysis extrapolated.",
     ]
     if not steering:
@@ -346,7 +346,7 @@ def steer_to_target(rows, factors, ranked, per_run, target):
     if not low <= target <= high:
         lines.append(
             f"The target is outside the range this array measured "
-            f"({low:.3g}..{high:.3g}), so the prediction extrapolates the "
+            f"({low:.6g}..{high:.6g}), so the prediction extrapolates the "
             "additive model instead of interpolating it. Re-centre the levels "
             "around the target and run a zoom round."
         )
