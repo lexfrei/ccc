@@ -26,10 +26,9 @@ import re
 import sys
 from datetime import datetime
 
-from design import build, parse_spec, select
+from design import COVARIATE_PREFIX, build, parse_spec, select
 
 STORE = ".doe"
-COVARIATE_PREFIX = "cov_"
 
 
 def slugify(title):
@@ -291,19 +290,7 @@ def main(argv):
         save(state, store)
         print(describe(state))
     elif opts.command == "csv":
-        state = load(opts.slug, store)
-        print(to_csv(state))
-        names = covariate_names(state)
-        if names:
-            # The journal knows which columns are covariates; the CSV cannot say
-            # so, and analyze.py reads an unnamed column as a factor.
-            print(
-                "note: covariate column(s) "
-                + ", ".join(names)
-                + " — pass them to analyze.py as "
-                + " ".join(f"--covariate {n}" for n in names),
-                file=sys.stderr,
-            )
+        print(to_csv(load(opts.slug, store)))
     elif opts.command == "close":
         state = load(opts.slug, store)
         state["status"] = "closed"

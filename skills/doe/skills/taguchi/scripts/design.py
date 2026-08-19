@@ -20,6 +20,10 @@ from arrays import TABLES, levels_per_column
 # Smallest first; the first array that fits wins.
 CANDIDATES = ["L4", "L8", "L9", "L12", "L18"]
 
+# Reserved: analyze.py reads a column with this prefix as a covariate, so a
+# factor carrying it would be dropped from the ranking instead of ranked.
+COVARIATE_PREFIX = "cov_"
+
 
 def parse_spec(args):
     factors = {}
@@ -31,6 +35,11 @@ def parse_spec(args):
             raise ValueError(f"factor needs a name and 2+ levels: {arg!r}")
         if name in factors:
             raise ValueError(f"duplicate factor: {name}")
+        if name.lower().startswith(COVARIATE_PREFIX):
+            raise ValueError(
+                f"{name}: {COVARIATE_PREFIX!r} marks a covariate column in the "
+                "results CSV, so a factor cannot start with it — rename it"
+            )
         if len(set(levels)) != len(levels):
             raise ValueError(f"duplicate level in factor: {arg!r}")
         if len(levels) > 3:

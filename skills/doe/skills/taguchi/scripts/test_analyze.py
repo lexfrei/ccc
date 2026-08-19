@@ -256,6 +256,32 @@ def test_large_means_print_as_numbers_not_exponents():
     assert "1e+03" not in report
 
 
+def test_outcome_type_forces_a_numeric_zero_one_column():
+    """An error count of 0 is the good run; as pass/fail the 0 is the failure."""
+    rows = [
+        {"pool": pool, "batch": str(i), "result": errors}
+        for pool, errors in (("8", "0"), ("16", "1"))
+        for i in (0, 1)
+    ]
+    args = (rows, ["pool", "batch"], ["result"], [], None, None)
+    assert "every failure sits at **pool=8**" in analyze(*args)
+    numeric = analyze(*args, "numeric")
+    assert "Binary outcome" not in numeric
+    assert "pool | 8: 0" in numeric
+
+
+def test_table_means_are_not_exponents():
+    """The complaint is about the table, which is where the means are read."""
+    rows = [
+        {"pool": pool, "batch": str(i), "result": str(rss)}
+        for pool, rss in (("8", 134217728), ("16", 268435456))
+        for i in (0, 1)
+    ]
+    report = analyze(rows, ["pool", "batch"], ["result"], [], None, None)
+    assert "134217728" in report
+    assert "e+0" not in report
+
+
 if __name__ == "__main__":
     for name, fn in sorted(globals().items()):
         if name.startswith("test_"):

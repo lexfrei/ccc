@@ -84,14 +84,20 @@ def to_number(text):
         return None
 
 
-def is_binary(rows, outcomes):
+def is_binary(rows, outcomes, forced="auto"):
     """True when every recorded outcome is a pass/fail word.
+
+    `forced` settles the one case the data cannot: a measurement that happens
+    to take only the values 0 and 1 is indistinguishable from a pass/fail
+    column, and reading it as one scores the zero as the failure.
 
     The test has to be the vocabulary, not "does the cell parse as a number":
     `0` and `1` are in that vocabulary, and reading them as measurements made
     the verdict come out inverted against the same experiment spelled
     pass/fail — 1 means pass, and a score of 1.0 means failed.
     """
+    if forced != "auto":
+        return forced == "binary"
     cells = [row[c] for row in rows for c in outcomes if row[c] != ""]
     return bool(cells) and all(v.lower() in BINARY_WORDS for v in cells)
 
@@ -128,6 +134,18 @@ def _cell(value):
     return str(value).replace("\\", "\\\\").replace("|", "\\|")
 
 
+def _num(value):
+    """Fixed point, because 1.34e+08 is a mean nobody can act on.
+
+    %g flips to an exponent once the value passes its precision, which is the
+    range an RSS in bytes or a latency in microseconds lives in. Only genuinely
+    huge or tiny values keep the exponent.
+    """
+    if value and not 1e-4 <= abs(value) < 1e12:
+        return f"{value:.6g}"
+    return f"{value:.4f}".rstrip("0").rstrip(".")
+
+
 def censored_report(rows, factors, censored, n):
     """Which levels the runs that produced no measurement are sitting on."""
     lines = [
@@ -144,8 +162,8 @@ def censored_report(rows, factors, censored, n):
         delta = max(means.values()) - min(means.values())
         p_value = permutation_p(rows, factor, scores)
         ranked.append((delta, factor))
-        cells = ", ".join(f"{_cell(lv)}: {value:.2f}" for lv, value in means.items())
-        lines.append(f"| {_cell(factor)} | {cells} | {delta:.3g} | {p_value:.3f} |")
+        cells = ", ".join(f"{_cell(lv)}: {_num(value)}" for lv, value in means.items())
+        lines.append(f"| {_cell(factor)} | {cells} | {_num(delta)} | {p_value:.3f} |")
     ranked.sort(reverse=True)
     lines.append("")
     lines.append(
@@ -312,7 +330,7 @@ def steer_to_target(rows, factors, ranked, per_run, target):
 
     stable = [f for f in factors if f not in steering]
     lines = [
-        f"Two-step answer for target={target:g} — stability first, mean second: "
+        f"Two-step answer for target={_num(target)} — stability first, mean second: "
         "a knob that steers the mean and moves S/N as well bakes the noise in.\n",
         "1. Stability: "
         + (
@@ -331,8 +349,8 @@ def steer_to_target(rows, factors, ranked, per_run, target):
         "stability; set to land on the target.\n",
         "Predicted optimum: "
         + ", ".join(f"{f}={choice[f]}" for f in factors)
-        + f" — predicted mean {predicted:.6g} against a target of {target:g} "
-        f"(miss {miss:.6g}). It is usually not a row of the array — the array "
+        + f" — predicted mean {_num(predicted)} against a target of {_num(target)} "
+        f"(miss {_num(miss)}). It is usually not a row of the array — the array "
         "sampled, the analysis extrapolated.",
     ]
     if not steering:
@@ -346,7 +364,7 @@ def steer_to_target(rows, factors, ranked, per_run, target):
     if not low <= target <= high:
         lines.append(
             f"The target is outside the range this array measured "
-            f"({low:.6g}..{high:.6g}), so the prediction extrapolates the "
+            f"({_num(low)}..{_num(high)}), so the prediction extrapolates the "
             "additive model instead of interpolating it. Re-centre the levels "
             "around the target and run a zoom round."
         )
@@ -358,12 +376,12 @@ def noise_floor(per_run):
     return sum(spreads) / len(spreads) if spreads else None
 
 
-def analyze(rows, factors, outcomes, covariates, goal, target):
+def analyze(rows, factors, outcomes, covariates, goal, target, outcome_type="auto"):
     if goal == "target" and target is None:
         raise ValueError(
             "target mode steers onto a number — pass --goal target=VALUE"
         )
-    binary = is_binary(rows, outcomes)
+    binary = is_binary(rows, outcomes, outcome_type)
     raw_runs = []
     for i, row in enumerate(rows, 1):
         values = read_outcomes(row, outcomes, numeric=not binary)
@@ -437,7 +455,7 @@ def analyze(rows, factors, outcomes, covariates, goal, target):
         if floor is not None:
             lines.append(
                 f"Noise floor: mean spread between repeats of the same run is "
-                f"{floor:.3g}. A delta below that separates nothing.\n"
+                f"{_num(floor)}. A delta below that separates nothing.\n"
             )
         else:
             lines.append(
@@ -461,12 +479,12 @@ def analyze(rows, factors, outcomes, covariates, goal, target):
     )
     lines.append("| --- | " + " | ".join("---" for _ in range(width + 2)) + " |")
     for delta, factor, means, p_value in ranked:
-        cells = [f"{_cell(lv)}: {value:.3g}" for lv, value in means.items()]
+        cells = [f"{_cell(lv)}: {_num(value)}" for lv, value in means.items()]
         cells += [""] * (width - len(cells))
         lines.append(
             f"| {_cell(factor)} | "
             + " | ".join(cells)
-            + f" | {delta:.3g} | {p_value:.3f} |"
+            + f" | {_num(delta)} | {p_value:.3f} |"
         )
     lines.append("")
     expected_lucky = 0.05 * len(factors)
@@ -518,8 +536,8 @@ def analyze(rows, factors, outcomes, covariates, goal, target):
         biggest = max(delta for delta, _, _, _ in ranked)
         lines.append(
             f"Covariate `{covariate}`: "
-            + ", ".join(f"{k}={v:.3g}" for k, v in means.items())
-            + f" (spread {spread:.3g})."
+            + ", ".join(f"{k}={_num(v)}" for k, v in means.items())
+            + f" (spread {_num(spread)})."
         )
         if spread >= biggest * 0.5:
             lines.append(
@@ -577,6 +595,13 @@ def main(argv):
         "--goal",
         help="minimize | maximize | target=VALUE — switches the analysis to S/N",
     )
+    parser.add_argument(
+        "--outcome-type",
+        choices=["auto", "binary", "numeric"],
+        default="auto",
+        help="auto reads 0/1 as pass/fail; force numeric for a measurement "
+        "whose values happen to be only 0 and 1",
+    )
     opts = parser.parse_args(argv)
 
     goal, target = opts.goal, None
@@ -596,7 +621,9 @@ def main(argv):
     factors, outcomes, covariates = classify(
         list(rows[0]), opts.outcome, opts.covariate
     )
-    print(analyze(rows, factors, outcomes, covariates, goal, target))
+    print(
+        analyze(rows, factors, outcomes, covariates, goal, target, opts.outcome_type)
+    )
 
 
 if __name__ == "__main__":

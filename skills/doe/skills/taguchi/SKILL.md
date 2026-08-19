@@ -182,7 +182,7 @@ Prefer a numeric outcome over binary whenever one exists (latency, retry count, 
 
 ## Step 5 — main-effects analysis
 
-Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns, prefixed `cov_` so they are never ranked as factors. `experiment.py csv` emits exactly that shape. A binary outcome may be spelled `pass`/`fail`, `ok`/`bad`, `true`/`false` or `1`/`0` — the digits are the booleans, so `0` is a failure in every spelling, and a sheet mixing spellings reads the same either way:
+Feed the finished sheet to `scripts/analyze.py` rather than averaging by hand — one CSV row per run, the factor columns from the sheet, a `result` column (numeric, or pass/fail), `result_1..n` for repeats, covariates in their own columns, prefixed `cov_` so they are never ranked as factors. `experiment.py csv` emits exactly that shape. A binary outcome may be spelled `pass`/`fail`, `ok`/`bad`, `true`/`false` or `1`/`0` — the digits are the booleans, so `0` is a failure in every spelling, and a sheet mixing spellings reads the same either way. A measurement that happens to take only the values 0 and 1 (an error count, say) is indistinguishable from that, so pass `--outcome-type numeric` when the zeros are the good runs. `cov_` is reserved: a factor cannot be named with it, because the results CSV reads that prefix as a covariate:
 
 ```bash
 python3 scripts/experiment.py csv flaky-lockfile > results.csv

@@ -5,7 +5,7 @@ import re
 from itertools import combinations
 
 from arrays import TABLES, imbalance, parse
-from design import assign, build, parse_spec, select
+from design import COVARIATE_PREFIX, assign, build, parse_spec, select
 
 SKILL = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "SKILL.md")
 
@@ -95,6 +95,26 @@ def test_too_many_factors_is_refused():
     except ValueError:
         return
     raise AssertionError("accepted 12 two-level factors")
+
+
+def test_forced_array_too_small_names_the_array():
+    factors = {f"f{i}": ["a", "b"] for i in range(4)}
+    try:
+        select(factors, "L4")
+    except ValueError as error:
+        assert "L4" in str(error)
+        return
+    raise AssertionError("L4 accepted 4 factors")
+
+
+def test_factor_named_like_a_covariate_is_refused():
+    """analyze.py reads the prefix as a covariate, so the name has to be free."""
+    try:
+        parse_spec([f"{COVARIATE_PREFIX}mode=a,b", "b=1,2", "c=1,2"])
+    except ValueError as error:
+        assert COVARIATE_PREFIX in str(error)
+        return
+    raise AssertionError(f"accepted a factor named {COVARIATE_PREFIX}mode")
 
 
 if __name__ == "__main__":
