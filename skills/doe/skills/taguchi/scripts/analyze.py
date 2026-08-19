@@ -28,6 +28,7 @@ FAIL_WORDS = {"fail", "failed", "bad", "broken", "red", "no", "false", "0"}
 PASS_WORDS = {"pass", "passed", "ok", "good", "green", "yes", "true", "1"}
 BINARY_WORDS = FAIL_WORDS | PASS_WORDS
 OUTCOME_HINTS = ("result", "outcome", "y", "value", "latency", "time", "duration")
+COVARIATE_PREFIX = "cov_"
 
 
 def read_rows(path):
@@ -42,7 +43,17 @@ def read_rows(path):
 
 
 def classify(columns, outcomes, covariates):
-    """Split the header into factor, outcome and covariate columns."""
+    """Split the header into factor, outcome and covariate columns.
+
+    A `cov_` prefix marks a covariate — that is what `experiment.py csv`
+    emits, because a column nobody could set is not a factor and ranking it
+    as one invents a suspect the array never controlled.
+    """
+    covariates = list(covariates) + [
+        c
+        for c in columns
+        if c.lower().startswith(COVARIATE_PREFIX) and c not in covariates
+    ]
     if not outcomes:
         outcomes = [
             c

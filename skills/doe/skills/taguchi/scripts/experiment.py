@@ -29,6 +29,7 @@ from datetime import datetime
 from design import build, parse_spec, select
 
 STORE = ".doe"
+COVARIATE_PREFIX = "cov_"
 
 
 def slugify(title):
@@ -175,7 +176,14 @@ def to_csv(state):
     names = list(state["factors"])
     covariates = covariate_names(state)
     width = max([len(run["results"]) for run in state["runs"]] + [1])
-    header = ["run"] + names + [f"result_{i}" for i in range(1, width + 1)] + covariates
+    # Covariates ship prefixed: the journal knows which columns were never
+    # assigned to a array column, and analyze.py must not rank them as factors.
+    header = (
+        ["run"]
+        + names
+        + [f"result_{i}" for i in range(1, width + 1)]
+        + [f"{COVARIATE_PREFIX}{name}" for name in covariates]
+    )
     # csv.writer, not ",".join: a level or a covariate holding a comma, a quote
     # or a newline would otherwise emit a row wider than its header, and
     # analyze.py reads the shifted columns as data.

@@ -85,7 +85,7 @@ def test_csv_pads_repeats_and_carries_covariates():
         record(state, 1, ["120", "125"], ["region=eu"])
         record(state, 2, ["130"], [])
         lines = to_csv(state).splitlines()
-        assert lines[0] == "run,os,node,cache,result_1,result_2,region"
+        assert lines[0] == "run,os,node,cache,result_1,result_2,cov_region"
         assert lines[1].endswith("120,125,eu")
         assert lines[2].endswith("130,,")
 
@@ -144,6 +144,19 @@ def test_outstanding_takes_a_repeat_override():
         record(state, 1, ["pass"], [])
         assert outstanding(state) == [2, 3, 4]
         assert outstanding(state, 2) == [1, 2, 3, 4]
+
+
+def test_covariates_ship_prefixed_so_analyze_never_ranks_them():
+    from analyze import classify
+
+    with tempfile.TemporaryDirectory() as store:
+        state = fresh(store)
+        record(state, 1, ["10"], ["region=eu"])
+        header = to_csv(state).splitlines()[0].split(",")
+        assert "cov_region" in header and "region" not in header
+        factors, outcomes, covariates = classify(header, [], [])
+        assert covariates == ["cov_region"]
+        assert "cov_region" not in factors
 
 
 if __name__ == "__main__":
