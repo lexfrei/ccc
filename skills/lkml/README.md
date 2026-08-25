@@ -13,7 +13,7 @@ Skills for working with Linux kernel mailing lists end to end: reading and monit
 
 ### lore
 
-Read, search, and monitor threads on lore.kernel.org with plain curl. Covers the User-Agent gate (default curl gets 403, browser agents get an Anubis challenge, `lei/1.0` passes on every endpoint), whole-thread mbox fetch, cheap new-reply polling via atom feeds — including how to tell a real reply from a lore reindex — public-inbox search syntax, and how to separate maintainer replies from bot traffic when reading a series. Invoked when a task needs a kernel thread fetched, prior discussion found, or a Message-ID extracted; also `/lkml:lore`.
+Read, search, and monitor threads on lore.kernel.org with plain curl. Covers the User-Agent gate (default curl gets 403, browser agents get an Anubis challenge, `lei/1.0` passes on every endpoint), whole-thread mbox fetch, cheap new-reply polling via atom feeds — including how to tell a real reply from a lore reindex — public-inbox search syntax, and how to separate maintainer replies from bot traffic when reading a series. A "check the lists" ask sweeps every thread in the project's tracking file in one pass and reports a single digest. Invoked when a task needs a kernel thread fetched, tracked submissions swept, prior discussion found, or a Message-ID extracted; also `/lkml:lore`.
 
 ### patch-status
 
@@ -21,11 +21,11 @@ Check what patchwork says will happen to a patch: the api/1.2 query by patch-mai
 
 ### reply
 
-Compose and send an in-thread review reply: the reply-vs-new-version gate, building the mail from real thread headers, interleaved trimmed quoting at 72 columns, the answer-every-comment rule, and disagreement carried by mechanism rather than seniority. Sends with `git send-email --in-reply-to` only after showing the user the full text and recipient set. Invoked for any prose response inside an existing kernel thread; also `/lkml:reply`.
+Compose and send an in-thread review reply: the reply-vs-new-version gate, building the mail from real thread headers, interleaved trimmed quoting at 72 columns, the answer-every-comment rule, and disagreement carried by mechanism rather than seniority. Sends with `git send-email --in-reply-to` only after showing the user the full text and recipient set, then confirms delivery on lore and records the Message-ID in the tracking file. Invoked for any prose response inside an existing kernel thread; also `/lkml:reply`.
 
 ### submit
 
-Post a patch series — v1 or any reroll, always as a new thread. Ordered gates before the send: content (WHY-only commit bodies, grep-verified set claims, `Fixes:`/`Closes:` tags, the kernel's `Assisted-by:` disclosure format from coding-assistants.rst), recipients (get_maintainer.pl plus everyone from prior discussion, nobody dropped), format (tree subject prefixes, changelog under the `---` scissors, carrying received tags forward), `checkpatch.pl --strict`, and timing (24 hours between versions, merge-window closures). Invoked when kernel patches need to go out; also `/lkml:submit`.
+Post a patch series — v1 or any reroll, always as a new thread. Ordered gates before the send: content (WHY-only commit bodies, grep-verified set claims, `Fixes:`/`Closes:` tags, the kernel's `Assisted-by:` disclosure format from coding-assistants.rst), recipients (get_maintainer.pl plus everyone from prior discussion, nobody dropped), format (tree subject prefixes, reviewer-attributed changelog under the `---` scissors, carrying received tags forward), `checkpatch.pl --strict` plus a placeholder grep, and timing (24 hours between versions, batched sends, merge-window closures). After the send: delivery confirmed on lore, Message-ID recorded, downstream copies resynced. Invoked when kernel patches need to go out; also `/lkml:submit`.
 
 ### etiquette
 

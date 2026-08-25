@@ -1,6 +1,6 @@
 ---
 name: lore
-description: Read, search, and monitor Linux kernel mailing-list threads on lore.kernel.org. TRIGGER — invoke when a task involves fetching a kernel thread, checking whether reviewers replied to a submission, finding prior discussion of a topic, or extracting a Message-ID for a follow-up. DO NOT TRIGGER for checking whether a patch was accepted (use lkml:patch-status) or for composing outgoing mail (use lkml:reply or lkml:submit).
+description: Read, search, and monitor Linux kernel mailing-list threads on lore.kernel.org. TRIGGER — invoke when a task involves fetching a kernel thread, checking whether reviewers replied to a submission, sweeping all tracked submissions for news ("check the lists", "any replies?"), finding prior discussion of a topic, or extracting a Message-ID for a follow-up. DO NOT TRIGGER for checking whether a patch was accepted (use lkml:patch-status) or for composing outgoing mail (use lkml:reply or lkml:submit).
 argument-hint: "[lore URL | Message-ID | search query]"
 ---
 
@@ -48,6 +48,12 @@ curl --silent --user-agent "lei/1.0" "https://lore.kernel.org/<list>/?q=<url-enc
 - Terms AND by default; `OR` must be uppercase
 
 Search one list when the list is known — `/all/` works but ranks noisier.
+
+## Sweeping tracked threads
+
+When the ask is "check the lists" rather than one thread, work from the project's tracking file — a CSV or markdown list of message-ids and their last known states, usually near the patches themselves. If none exists, ask the user which threads matter and offer to start one.
+
+Sweep every tracked thread in one pass: the atom check above for new replies, plus the patchwork state (lkml:patch-status) for submitted series. Report ONE digest for the whole sweep — what changed, what needs action, what stayed quiet — never a message per thread. Write state changes back into the tracking file in the same session.
 
 ## Reading a series
 
