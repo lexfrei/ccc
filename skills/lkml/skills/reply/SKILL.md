@@ -59,3 +59,7 @@ git send-email --confirm=never \
 To is the person being answered; Cc is everyone already on the thread plus the lists — the full reply-all set. Removing anyone who was on Cc is bad form, even people who have not spoken.
 
 Show the user the complete reply text and recipient list and get an explicit OK before running git send-email — this is public, archived, and unretractable.
+
+A reply on its own does not reset the 24-hour clock between series versions, but when a patch batch is already being prepared, let the reply ride the same send window instead of trickling out separately.
+
+Confirm delivery, not just submission: SMTP 250 in the send output, then the mail appears at `https://lore.kernel.org/<list>/<your-message-id>/` within minutes. Record the sent Message-ID in the project's thread-tracking file (see lkml:lore) in the same session.
