@@ -160,6 +160,12 @@
       "description": "Session role switches plus the specialist agent workforce they run. Roles: manager — turn the session into the lead of a subagent fleet that briefs teammates, delegates whole loops, approves their output inside the delegated scope, integrates by ground truth, and reports upward in short digests instead of executing directly. Bundled agents, spawnable as fleet teammates or callable directly as @agent-become:<name>: architecture (technical decisions and .architecture.yaml), go, python, templ (Templ and HTMX frontend), kubernetes (manifests and ArgoCD), helm (charts), containers (image builds), quality (lint, tests, security, then commit and push), hygiene (AI-artifact cleanup)",
       "source": "./skills/become",
       "category": "productivity"
+    },
+    {
+      "name": "lkml",
+      "description": "Linux kernel mailing-list workflow: reading and monitoring threads on lore.kernel.org, checking patch state in patchwork, replying to review inline, submitting patch series with git send-email, and the communication rules that keep a submission alive — recipients, timing, tone, and prose that passes maintainer review",
+      "source": "./skills/lkml",
+      "category": "development"
     }
   ],
   "renames": {
