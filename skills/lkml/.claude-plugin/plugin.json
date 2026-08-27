@@ -1,6 +1,6 @@
 {
   "name": "lkml",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Linux kernel mailing-list workflow: reading and monitoring threads on lore.kernel.org, checking patch state in patchwork, replying to review inline, submitting patch series with git send-email, and the communication rules that keep a submission alive — recipients, timing, tone, and prose that passes maintainer review",
   "author": {
     "name": "Aleksei Sviridkin",
