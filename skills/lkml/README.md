@@ -25,7 +25,7 @@ Compose and send an in-thread review reply: the reply-vs-new-version gate, build
 
 ### submit
 
-Post a patch series — v1 or any reroll, always as a new thread. Ordered gates before the send: content (WHY-only commit bodies, grep-verified set claims, `Fixes:`/`Closes:` tags, the kernel's `Assisted-by:` disclosure format from coding-assistants.rst), recipients (get_maintainer.pl plus everyone from prior discussion, nobody dropped), format (tree subject prefixes, reviewer-attributed changelog under the `---` scissors, carrying received tags forward), `checkpatch.pl --strict` plus a placeholder grep, and timing (24 hours between versions, batched sends, merge-window closures). After the send: delivery confirmed on lore, Message-ID recorded, downstream copies resynced. Invoked when kernel patches need to go out; also `/lkml:submit`.
+Post a patch series — v1 or any reroll, always as a new thread. Ordered gates before the send: content (WHY-only commit bodies under a two-to-three-paragraph volume cap that also covers the scissors section, grep-verified set claims, `Fixes:`/`Closes:` tags including the pre-git case, the kernel's `Assisted-by:` disclosure format from coding-assistants.rst), recipients (get_maintainer.pl plus everyone from prior discussion, nobody dropped), format (tree subject prefixes, reviewer-attributed changelog under the `---` scissors, carrying received tags forward), `checkpatch.pl --strict` plus a placeholder grep, and timing (24 hours between versions, batched sends, merge-window closures). After the send: delivery confirmed on lore, Message-ID recorded, downstream copies resynced. Invoked when kernel patches need to go out; also `/lkml:submit`.
 
 ### etiquette
 

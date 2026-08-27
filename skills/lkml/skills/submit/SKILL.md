@@ -10,9 +10,13 @@ Every posting of a series — v1 and every reroll — is a **new thread**. Revie
 
 **Commit message = WHY.** The subject is `subsystem: imperative summary` at 70-75 characters; the body says why the change is needed and why this way, hard-wrapped at 75 columns. Mechanism walkthroughs, rejected-alternative essays, and reachability analyses do not belong in the commit body — put them under the `---` scissors or in the cover letter. A verbose commit body draws "This is very verbose. Is it AI generated?" and a changes-requested; there is a public precedent of exactly that: https://lore.kernel.org/netdev/20260822195252.2934-1-f@lex.la/
 
+**WHY-only is necessary but not sufficient — there is also a volume cap.** The working measure is maintainer-tip.rst's improved examples: context, problem, solution as separate paragraphs in that order, two to three paragraphs of two to three sentences. Write for a reviewer who has the diff open — anything readable from it gets deleted, and a body that narrates what the code does draws "Blah, blah, blah. Please assume i can read the patch and understand what it does" even when every sentence is a why (precedent, the v2 of that same series: https://lore.kernel.org/netdev/20260824024117.46154-1-f@lex.la/). When in doubt, too short beats too long.
+
+**The scissors are not a dumping ground either.** Analysis moved below `---` still gets read, and a long one draws "condense the above writing in a much shorter text, or point to prior discussion" while burying the one sentence a reviewer actually needs ("Why conditional? Maybe it is buried deep in that wall of text?"). Keep the scissors section to a few sentences and replace analysis with a lore link to the thread where it already happened; a justification a reviewer is likely to ask about belongs in the body, briefly, not below the cut.
+
 **Verify claims about sets.** Any sentence of the form "all drivers do X", "this lock is only taken once", "no caller passes NULL" is an invitation for a reviewer to find the counterexample. Grep the tree for each such claim before sending, or rewrite it as a statement about the mechanism.
 
-**Bug fixes carry a `Fixes:` tag** — 12+ character SHA plus the quoted subject of the broken commit, one line, never wrapped. Reports from other people carry `Reported-by:` plus a `Closes:` link to the report on lore.
+**Bug fixes carry a `Fixes:` tag** — 12+ character SHA plus the quoted subject of the broken commit, one line, never wrapped. The commit to name is the oldest one that still reproduces the issue, found with `git log -S` rather than guessed; when the root cause genuinely predates git history, the canonical tag is `Fixes: 1da177e4c3f4 ("Linux-2.6.12-rc2")`. A fix posted without the tag gets asked for it and rerolled. Reports from other people carry `Reported-by:` plus a `Closes:` link to the report on lore.
 
 **AI assistance is disclosed** per Documentation/process/coding-assistants.rst with the kernel's own tag format, which checkpatch validates:
 
@@ -22,7 +26,7 @@ Assisted-by: Claude:claude-fable-5
 
 Format is `Assisted-by: AGENT:MODEL [tool1] [tool2]`, the optional brackets naming analysis tools like coccinelle or smatch. The `Assisted-By: Name <email>` form used in other projects is formally invalid here. `Signed-off-by:` is the human's DCO certification — the author adds it themselves (`git commit --signoff`); never generate or alter it.
 
-**Rerolls answer everything first.** A new version goes out only after every comment on the previous one has a reply in the old thread, and never while that discussion is still live.
+**Rerolls answer everything first.** A new version goes out only after every comment on the previous one has a reply in the old thread, and never while that discussion is still live. Questions a reviewer had to ask get their answers folded into the commit message itself, not just the thread — per maintainer-netdev.rst, "occasionally the update of the commit message will be the only change in the new version".
 
 ## 2. Recipients
 
@@ -37,7 +41,7 @@ scripts/get_maintainer.pl /tmp/series/*.patch
 
 ## 3. Format
 
-- Subject prefix names the target tree where the subsystem requires it: netdev uses `[PATCH net]` for fixes and `[PATCH net-next]` for features, lowercase (`git format-patch --subject-prefix="PATCH net-next"`). Other subsystems: check `Documentation/process/maintainer-*.rst` and the `P:` entry in MAINTAINERS before inventing a prefix. Unready work is `[RFC ...]`.
+- Subject prefix names the target tree where the subsystem requires it: netdev uses `[PATCH net]` for fixes and `[PATCH net-next]` for features, lowercase (`git format-patch --subject-prefix="PATCH net-next"`). The prefix is routing, not decoration: a fix posted as net-next is not picked up by netdev's automation and comes back as "please re-submit with the correct target tree" — anything carrying a `Fixes:` tag is net material. Other subsystems: check `Documentation/process/maintainer-*.rst` and the `P:` entry in MAINTAINERS before inventing a prefix. Unready work is `[RFC ...]`.
 - Multi-patch series get a cover letter; keep a series at 15 patches or fewer and one logical change per patch.
 - **The reroll changelog lives under the `---` scissors** — in the cover letter for a series, under the `---` of the single patch otherwise — so git drops it on apply. One bullet per change, each attributed to the reviewer who asked for it, plus a link to the previous posting: `v1: https://lore.kernel.org/r/<message-id>/`. A reroll resends the entire series, not just the changed patches.
 - **Carry received tags forward:** `Reviewed-by:`, `Acked-by:`, `Tested-by:` given on the list for unchanged patches are added by you to the next version. Tags other than `Cc:`, `Reported-by:`, and `Suggested-by:` are never invented — they require the named person to have actually offered them.
