@@ -48,7 +48,7 @@ Tags are signed statements by real people, not decoration:
 
 | tag | states | who may add it |
 | --- | --- | --- |
-| `Signed-off-by:` | DCO certification of origin | each human in the patch's path; never generated |
+| `Signed-off-by:` | DCO certification of origin | each human in the patch's path |
 | `Reviewed-by:` | reviewed and found acceptable | you, only after the person offered it on-list |
 | `Acked-by:` | maintainer of a touched area does not object | same — only if actually given |
 | `Tested-by:` | ran it and it worked | same |
@@ -56,7 +56,7 @@ Tags are signed statements by real people, not decoration:
 | `Reported-by:` + `Closes:` | who found the bug, link to the report | you may add without asking |
 | `Fixes:` | which commit introduced the bug | you; 12+ char SHA plus quoted subject, one unwrapped line |
 | `Cc:` | keep this person/list informed | you may add without asking |
-| `Assisted-by:` | AI/tool assistance disclosure | you; kernel format `AGENT:MODEL [tools]` — see lkml:submit |
+| `Assisted-by:` | AI/tool assistance disclosure | you; kernel format `LLM [tools]` — see lkml:submit |
 
 Offered tags on unchanged patches are carried into the next version by the author. Inventing a tag someone did not give is forgery of a public record.
 

@@ -222,7 +222,7 @@ git commit --signoff --message "type(scope): description
 
 Details of changes.
 
-Assisted-By: Claude <noreply@anthropic.com>"
+Assisted-by: LLM"
 ```
 
 Stage explicit paths, never `git add .` — an unrelated file swept into a commit is invisible until someone bisects it. Every commit is signed off. Push when the work is ready, not after every commit.
