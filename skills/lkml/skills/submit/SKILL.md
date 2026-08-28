@@ -21,10 +21,10 @@ Every posting of a series — v1 and every reroll — is a **new thread**. Revie
 **AI assistance is disclosed** per Documentation/process/coding-assistants.rst with the kernel's own tag format, which checkpatch validates:
 
 ```text
-Assisted-by: Claude:claude-fable-5
+Assisted-by: LLM
 ```
 
-Format is `Assisted-by: AGENT:MODEL [tool1] [tool2]`, the optional brackets naming analysis tools like coccinelle or smatch. The `Assisted-By: Name <email>` form used in other projects is formally invalid here. `Signed-off-by:` is the human's DCO certification — the author adds it themselves (`git commit --signoff`); never generate or alter it.
+Format is `Assisted-by: LLM [tool1] [tool2]`, the optional brackets naming analysis tools like coccinelle or smatch when they were actually used. The `Assisted-By: Name <email>` form used in other projects is formally invalid here.
 
 **Rerolls answer everything first.** A new version goes out only after every comment on the previous one has a reply in the old thread, and never while that discussion is still live. Questions a reviewer had to ask get their answers folded into the commit message itself, not just the thread — per maintainer-netdev.rst, "occasionally the update of the commit message will be the only change in the new version".
 
