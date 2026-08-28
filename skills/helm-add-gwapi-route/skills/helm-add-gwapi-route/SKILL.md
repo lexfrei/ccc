@@ -601,13 +601,13 @@ Produce a summary:
 2. **Detected API status** — the apiVersion table from Phase 2, highlighting any change vs training-data expectations.
 3. **Files created / modified** — absolute paths.
 4. **Applied changes** — list of what was added/patched (e.g. "added name: default to rules[0]", "migrated CORS annotation to filter").
-5. **Suggested commit message** (English, semantic commit). Include the full message body and the `Assisted-By` trailer required by repo/global CLAUDE.md:
+5. **Suggested commit message** (English, semantic commit). Include the full message body and the `Assisted-by` trailer required by repo/global CLAUDE.md:
    - add-mode subject: `feat(<chart>): add HTTPRoute template for Gateway API support`
    - update-mode subject: `chore(<chart>): modernize HTTPRoute template to current Gateway API spec`
    - body: one sentence per change (what and why), then a blank line, then:
 
      ```text
-     Assisted-By: Claude <noreply@anthropic.com>
+     Assisted-by: LLM
      ```
 
 6. **Suggested PR title and draft body** (English). The body should state: mode (add/update), affected route types, API channel (Standard GA vs Experimental), and Gateway API minimum version required per kind (look up each touched kind in the Phase 2 min-version table — do not state a single universal floor).
