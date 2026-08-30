@@ -1,0 +1,9 @@
+{
+  "name": "setup-chrome-for-reddit",
+  "version": "1.0.0",
+  "description": "Set up or repair the Playwright MCP browser so it can reach Reddit and other bot-hostile sites: a user-agent override that drops the HeadlessChrome token, login through the normal old.reddit form, and DOM selectors for extracting threads without huge accessibility snapshots. Captcha solving and fingerprint-evasion libraries are explicitly out of scope",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}
