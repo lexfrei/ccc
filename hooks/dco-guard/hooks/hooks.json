@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ${CLAUDE_PLUGIN_ROOT}/scripts/dco_trailer_guard.py",
+            "timeout": 15,
+            "statusMessage": "dco-guard: checking sign-off trailers"
+          }
+        ]
+      }
+    ]
+  }
+}
