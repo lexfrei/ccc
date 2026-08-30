@@ -131,6 +131,12 @@
       "category": "productivity"
     },
     {
+      "name": "dco-guard",
+      "description": "PostToolUse hook that catches commits missing the Signed-off-by trailer — fires after every git command, stays silent in repositories that don't sign off, and suggests git rebase --signoff to repair",
+      "source": "./hooks/dco-guard",
+      "category": "quality"
+    },
+    {
       "name": "comment-hygiene",
       "description": "SessionStart hook that injects code-comment discipline into every session — every comment must earn its place: say what the code cannot, never duplicate it; bans narration, changelog comments, reviewer asides, signature-restating docstrings, and leaky provenance",
       "source": "./hooks/comment-hygiene",
