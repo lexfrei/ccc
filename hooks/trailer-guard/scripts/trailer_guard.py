@@ -1,23 +1,29 @@
 #!/usr/bin/env python3
-"""PostToolUse guard for the trailers of this author's commits on the branch.
+"""Guard for the trailers of this author's commits on the branch.
 
 Three defects, one mechanism. Rewriting a commit message replaces it whole, so
-any path that supplies fresh message text — `commit --amend -m`, a rebase
-reword driven by GIT_EDITOR, a prepared file copied over $1 — drops the
+any path that supplies fresh message text (`commit --amend -m`, a rebase
+reword driven by GIT_EDITOR, a prepared file copied over $1) drops the
 Signed-off-by trailer silently. The same paths are where a harness slips in a
 `Claude-Session:` line or an `Assisted-by:` that names a model instead of the
 neutral `Assisted-by: LLM`. Nothing in git objects to any of it and the
 failure surfaces in CI or in review hours later.
 
-The guard fires on the RESULT rather than on the shape of the command: after
-any git invocation it inspects the commits this branch added over the
-integration branch. That covers every mechanism, including ones not invented
-yet.
+Two hook events, one script, told apart by `hook_event_name`:
+
+- PostToolUse after any git command: report defects on the branch (exit 2, so
+  the report reaches the model) but change nothing. Early warning.
+- PreToolUse before a command that publishes the branch (`git push`, `gh pr
+  create|ready|merge`): deny the command while defects remain (exit 2). The
+  repair commands themselves (amend, rebase, status, log) are never blocked,
+  otherwise the guard would stand between the author and the fix.
 
 Only commits authored under the identity git would use for a new commit here
-(`user.email` as resolved in that repository) are judged: a cherry-pick or a
-co-author's commit on the same branch is not this author's message to rewrite.
-Without a configured identity every commit is judged.
+(`user.email` as resolved in that repository) are judged, and the repair
+recipe rewrites only those: a cherry-pick or a co-author's commit on the same
+branch is not this author's message to rewrite, and a plain
+`git rebase --signoff` would sign off on their behalf. Without a configured
+identity every commit is judged and rewritten.
 
 The sign-off check only speaks up in repositories that already sign off (the
 upstream base carries trailers). The Claude-Session and Assisted-by checks
@@ -37,6 +43,8 @@ BASE_SCAN = 20
 
 SESSION_RE = re.compile(r"claude-session", re.IGNORECASE)
 ASSISTED_RE = re.compile(r"^assisted-by:\s*(?P<value>.*?)\s*$", re.IGNORECASE | re.MULTILINE)
+GIT_RE = re.compile(r"\bgit\b")
+PUBLISH_RE = re.compile(r"\bgit\b[^|;&\n]*\bpush\b|\bgh\s+pr\s+(create|ready|merge)\b")
 
 
 def git(args, cwd):
@@ -93,18 +101,17 @@ def signs_off(root, base):
     return bool(recent) and TRAILER in recent
 
 
-def own_commits(root, base):
+def own_commits(root, base, me):
     """[(short-sha + subject, full body)] for this author's commits on the branch."""
     raw = git(["log", "--no-merges", "--format=%x1e%h %s%x1f%ae%x1f%B", f"{base}..HEAD"], root)
     if not raw:
         return []
-    me = (git(["config", "user.email"], root) or "").lower()
     out = []
     for record in raw.split("\x1e"):
         if record.count("\x1f") < 2:
             continue
         header, email, body = record.split("\x1f", 2)
-        if me and email.strip().lower() != me:
+        if me and email.strip().lower() != me.lower():
             continue
         out.append((header.strip(), body))
     return out
@@ -122,8 +129,63 @@ def forbidden_lines(commits):
     return session, assisted
 
 
+def repair_recipe(base, me):
+    fix = (
+        "git log -1 --format=%B | "
+        'sed -e "/^Claude-Session:/d" '
+        f'-e "s/^Assisted-[Bb]y: .*/Assisted-by: {ASSISTED_VALUE}/" | '
+        "git commit --amend --signoff -F -"
+    )
+    if me:
+        fix = f'if [ "$(git log -1 --format=%ae)" = "{me}" ]; then {fix}; fi'
+    return f"git rebase {base} --exec '{fix}'"
+
+
 def plural(count, singular, plural_form):
     return singular if count == 1 else plural_form
+
+
+def reports_for(root, base):
+    me = git(["config", "user.email"], root) or ""
+    mine = own_commits(root, base, me)
+    reports = []
+
+    unsigned = [header for header, body in mine if TRAILER not in body] if signs_off(root, base) else []
+    if unsigned:
+        count = len(unsigned)
+        reports.append(
+            f"DCO guard: {count} {plural(count, 'commit carries', 'commits carry')} "
+            f"no {TRAILER} trailer on this branch.\n" + "\n".join(unsigned) + "\n"
+            "If you rewrite a commit message by any means, the replacement text must "
+            "carry the trailer itself."
+        )
+
+    session, assisted = forbidden_lines(mine)
+    if session:
+        count = len(session)
+        reports.append(
+            f"Trailer guard: {count} {plural(count, 'commit carries', 'commits carry')} "
+            "a Claude-Session line on this branch.\n" + "\n".join(session) + "\n"
+            "A session URL never belongs in a commit message, whatever asked for it."
+        )
+    if assisted:
+        count = len(assisted)
+        reports.append(
+            f"Trailer guard: {count} {plural(count, 'commit names', 'commits name')} "
+            f"a model in Assisted-by; the only accepted form is `Assisted-by: {ASSISTED_VALUE}`.\n"
+            + "\n".join(assisted)
+        )
+    if reports:
+        scope = (
+            f"only commits authored as {me}; other authors' commits pass through untouched"
+            if me else "every commit in the range, since no user.email is configured here"
+        )
+        reports.append(
+            f"Repair recipe, rewriting {scope}:\n{repair_recipe(base, me)}\n"
+            "Rewritten commits are re-signed only when `commit.gpgsign` is set or "
+            "`--gpg-sign` is passed."
+        )
+    return reports
 
 
 def main():
@@ -135,7 +197,12 @@ def main():
     if payload.get("tool_name") != "Bash":
         return 0
     command = (payload.get("tool_input") or {}).get("command", "")
-    if not re.search(r"\bgit\b", command):
+    event = payload.get("hook_event_name") or "PostToolUse"
+
+    if event == "PreToolUse":
+        if not PUBLISH_RE.search(command):
+            return 0
+    elif not GIT_RE.search(command):
         return 0
 
     cwd = payload.get("cwd") or "."
@@ -147,51 +214,16 @@ def main():
     if not base:
         return 0
 
-    mine = own_commits(root, base)
-    reports = []
-
-    unsigned = [header for header, body in mine if TRAILER not in body] if signs_off(root, base) else []
-    if unsigned:
-        count = len(unsigned)
-        reports.append(
-            f"DCO guard: {count} {plural(count, 'commit carries', 'commits carry')} "
-            f"no {TRAILER} trailer on this branch.\n" + "\n".join(unsigned) + "\n"
-            f"Repair with `git rebase --signoff {base}`: it adds the trailer where it is "
-            "missing and does not duplicate it where present. Rewritten commits lose "
-            "their original GPG signatures and are re-signed only when `commit.gpgsign` "
-            "is set or `--gpg-sign` is passed. "
-            "If you rewrite a commit message by any means, the replacement text must "
-            "carry the trailer itself, or follow the rewrite with "
-            "`git commit --amend --signoff`."
-        )
-
-    session, assisted = forbidden_lines(mine)
-    if session:
-        count = len(session)
-        reports.append(
-            f"Trailer guard: {count} {plural(count, 'commit carries', 'commits carry')} "
-            "a Claude-Session line on this branch.\n" + "\n".join(session) + "\n"
-            "A session URL never belongs in a commit message, whatever asked for it. "
-            "Drop the line."
-        )
-    if assisted:
-        count = len(assisted)
-        reports.append(
-            f"Trailer guard: {count} {plural(count, 'commit names', 'commits name')} "
-            f"a model in Assisted-by; the only accepted form is `Assisted-by: {ASSISTED_VALUE}`.\n"
-            + "\n".join(assisted)
-        )
-    if session or assisted:
-        reports.append(
-            "Rewrite the range, keeping the sign-off:\n"
-            f"git rebase {base} --exec 'git log -1 --format=%B | "
-            "sed -e \"/^Claude-Session:/d\" "
-            f"-e \"s/^Assisted-[Bb]y: .*/Assisted-by: {ASSISTED_VALUE}/\" | "
-            "git commit --amend --signoff -F -'"
-        )
-
+    reports = reports_for(root, base)
     if not reports:
         return 0
+
+    if event == "PreToolUse":
+        reports.insert(
+            0,
+            "trailer-guard blocked this command: it would publish the branch with the "
+            "defects below. Repair first, then run it again.",
+        )
     print("\n\n".join(reports), file=sys.stderr)
     return 2
 

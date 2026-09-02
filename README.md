@@ -77,7 +77,7 @@ The ten standalone agent plugins are gone. Nine of their agents ship inside **be
 | **comment-hygiene** | SessionStart hook that injects code-comment discipline into every session — every comment must earn its place: say what the code cannot, never duplicate it; bans narration, changelog comments, reviewer asides, signature-restating docstrings, and leaky provenance |
 | **golangci-lint** | Auto-run golangci-lint on package when Go files are edited |
 | **md-no-hardwrap** | PreToolUse hook: reject `Write`/`Edit` on markdown files when a paragraph spans more than one line — enforces "one continuous line per paragraph" so renderers wrap to viewer width instead of fighting hardwraps in the source |
-| **trailer-guard** | PostToolUse hook that guards commit trailers on the current branch — fires after every git command and flags your own commits that lost `Signed-off-by`, carry a `Claude-Session` line, or name a model in `Assisted-by` instead of the neutral `Assisted-by: LLM` |
+| **trailer-guard** | Hook that guards commit trailers on the current branch: after every git command it flags your own commits that lost `Signed-off-by`, carry a `Claude-Session` line, or name a model in `Assisted-by` instead of the neutral `Assisted-by: LLM`, and it blocks `git push` and `gh pr create/ready/merge` until they are fixed; the repair recipe rewrites only your commits |
 | **worksync** | Daily work-sync markdown log — PostToolUse hook captures `gh pr/issue create/merge/close` automatically, companion skill logs research/ops/checkpoint events (prompts for vault path on install, works with Obsidian, Logseq, or plain markdown) |
 
 ## License
