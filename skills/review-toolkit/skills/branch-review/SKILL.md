@@ -1,7 +1,7 @@
 ---
 name: branch-review
 description: Review current branch changes in isolation. Output starts with LGTM verdict — if no LGTM, the code is not ready to merge. The verdict is decided ONLY by defects the diff introduced, worsened, or interacts with (merge-base attribution, computed from git); pre-existing defects are reported in full in a separate "Found outside this diff" section and never block. LGTM is compatible with a non-empty recommendations list. IMPORTANT — always pass all flags you already know from context (target branch, project type, ticket, round-1 head, etc.). Do not rely on auto-detection when the answer is known. Pass --target to set which branch the changes are going INTO. Pass --ticket with a URL or ID to validate against requirements. On re-review rounds pass --round1-head with the SHA from round 1's printed review header to enable churn diagnostics.
-argument-hint: "[path] [--target branch] [--nitpick] [--type go|node|python|rust] [--exclude pattern,pattern] [--ticket URL|ID] [--round1-head sha]"
+argument-hint: "[path] [--target branch] [--nitpick] [--type go|node|python|rust|kernel] [--exclude pattern,pattern] [--ticket URL|ID] [--round1-head sha]"
 context: fork
 agent: general-purpose
 ---
@@ -28,7 +28,7 @@ Parse $ARGUMENTS for:
 - Path to repository directory (positional, an existing directory path — e.g. `~/git/github.com/org/repo` or `../my-worktree`). If provided, ALL git and file operations must run inside this directory
 - `--target` the branch this PR is merging INTO (e.g. `next`, `develop`, `main`). This is the most important parameter for determining the correct diff scope
 - `--nitpick` flag for pedantic mode
-- `--type` project type (e.g. `go`, `node`, `python`, `rust`) — skips auto-detection
+- `--type` project type (e.g. `go`, `node`, `python`, `rust`, `kernel`) — skips auto-detection. `kernel` means a patch series bound for a kernel mailing list: the unit of review is each commit over the base, and the "Kernel patch series" criteria below apply
 - `--exclude` additional exclude patterns, comma-separated (e.g. `docs/,*.gen.go`)
 - `--ticket` ticket reference — URL (GitHub issue, Jira, Linear, Notion, etc.) or ID (e.g. `#123`, `PROJ-456`). When provided, the review includes a **Ticket Compliance** section that validates whether the changes fulfil the ticket requirements
 - `--round1-head` the head SHA the FIRST review round of this gate ran on — copy it from that round's output header (the `Reviewed <branch> at <sha>` line). Used only to compute finding-origin labels (feature vs churn, see "Finding origin and the churn mark"); it never affects severity or the verdict, so it is an auditable record of a past run, not a scope declaration. Omit on the first round
@@ -144,9 +144,27 @@ Review the diff for:
 - Test coverage: if the area being changed already has tests, new or changed code MUST come with tests, and those tests must define the full contract — valid use AND rejected/invalid use (error paths, boundaries, invalid inputs) — so they read as executable documentation of what is allowed and what is not. Happy-path-only tests in a tested area do not satisfy this and block (NOT LGTM). If the area has no tests at all, recommend adding them but do not block on that alone
 - Where a code defect is found: suggest a specific test in the existing test surface that would demonstrate the problem (e.g. "a test that calls X with empty input would expose this nil pointer")
 - Adjacent issues: if you find a problem, look at the surrounding code in the same area — related issues nearby are worth surfacing (not a full codebase audit, just the vicinity of the changes). Report everything you find; attribution (below) decides which section each finding lands in
+- A recommendation that names a helper, API, or library call is not a recommendation until the reviewer has read that symbol's definition and the finding quotes its semantics. A name alone is a guess dressed as advice: `ethtool_validate_speed()` sounded like a drop-in for a speed check and by definition accepts the one value the check rejects. If the definition does not fit, say why in one line instead of proposing it
 - Comments as fixes: if a change "addresses" a problem by adding a comment (TODO, FIXME, HACK, explanatory note, warning comment) instead of actually fixing the code — this is NOT a fix. Flag it explicitly: a comment documents a known problem but does not solve it. Nobody reads comments in the heat of the moment, and the problem will bite someone eventually. The actual code must be changed. This is always a blocking issue (NOT LGTM)
 - No regression from laziness: any behavior that worked before this change and stops working is a blocking issue (NOT LGTM). "Affects only a minority of users", "edge case", "rare config", "deprecated anyway" are NOT acceptable justifications — a path used by few is still a path that worked. Check all config variants, defaults, and flags, not just the common path. The only allowed break is an intentional breaking change the PR explicitly declares with a migration path; surface it in the review, never let it pass silently
 - Documentation accuracy: if the diff changes behavior, existing documentation (README, DESIGN.md, docs/, inline doc comments, Helm values descriptions, CLAUDE.md, etc.) that still describes the old behavior is a verdict finding and blocks — as are examples the diff broke and references to entities the diff removed or renamed. Documentation that was already wrong at the merge base goes to "Found outside this diff" with severity, per attribution below
+
+<if --type kernel>
+## Kernel patch series
+
+The unit of review is the commit, not the branch: every commit must build alone, carry one logical change, and have a message that stands without the thread that produced it. Review each commit's diff and message in series order, then the series as a whole.
+
+What list reviewers bounce, each item learned from an actual bounce:
+
+- **Commit body is WHY only.** Mechanism, register maps, and the walk through the code go below the scissors (`---`) or into the cover letter. A body that narrates the diff reads as machine-written and comes back with "is it AI generated?".
+- **In-code comments are WHY only and as short as the language allows.** One line where one line does. Reviewers name rising comment verbosity as an LLM symptom and ask for `/* X is not supported */` in place of a paragraph; the reasoning belongs in the commit message, and an added comment longer than a line needs a reason the code itself cannot carry.
+- **No invented vocabulary.** Every noun in a comment or message must be a term the subsystem already uses; a coined metaphor ("parked" for an interrupt set to PHY_POLL) draws "What parking?" and a respin.
+- **Universal statements get falsified with one counterexample.** "installed later", "every entry fails", "the only losses were the first packet", "with no PHY it writes X and nothing more" — each was caught. Write the mechanism per code path (which branch writes what, under which condition), never a quantifier, and grep for the counterexample before asserting anything about a set. Cases are named by the branch of code that handles them, not by the link or device type they are usually associated with.
+- **Every claimed failure mode must be reachable.** Trace the path before describing the impact; a clause that cannot happen ("or programs a meaningless on-time" when the earlier check always fires) overstates and draws "does this actually happen?" — the question a stable-bound fix must survive.
+- **Error strings name the case the user will actually hit** ("Invalid speed %d, link-down?"), one format string for all values that reach it.
+
+Report per commit: build result at the warning level the tree uses, checkpatch totals, and which of the items above the commit violates. A message or comment defect on this list is a verdict finding: on a mailing list it costs a respin exactly like a code defect does.
+</if>
 
 ## Finding attribution
 
