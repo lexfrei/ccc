@@ -55,8 +55,9 @@ def make_repo(tmp, base_signed=True):
     return repo
 
 
-def run_hook(repo, command="git status"):
-    payload = {"tool_name": "Bash", "tool_input": {"command": command}, "cwd": repo}
+def run_hook(repo, command="git status", event="PostToolUse"):
+    payload = {"hook_event_name": event, "tool_name": "Bash",
+               "tool_input": {"command": command}, "cwd": repo}
     done = subprocess.run(
         [sys.executable, str(HOOK)],
         input=json.dumps(payload),
@@ -93,6 +94,8 @@ def test_missing_signoff_is_reported():
         assert code == 2, err
         assert "Signed-off-by" in err
         assert "forgot signoff" in err
+        assert "--exec" in err
+        assert "git rebase --signoff" not in err
 
 
 def test_claude_session_trailer_is_reported():
@@ -200,6 +203,78 @@ def test_without_configured_identity_every_commit_is_judged():
         code, err = run_hook(repo)
         assert code == 2, err
         assert "Claude-Session" in err
+
+
+def recipe_from(err):
+    lines = [l for l in err.splitlines() if l.startswith("git rebase ")]
+    assert len(lines) == 1, err
+    return lines[0]
+
+
+def test_pre_tool_use_blocks_publishing_with_defects():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        for cmd in ("git push origin feature", "git push --force-with-lease",
+                    "gh pr create --title x --body y", "gh pr ready 7", "gh pr merge 7 --squash"):
+            code, err = run_hook(repo, command=cmd, event="PreToolUse")
+            assert code == 2, (cmd, err)
+            assert "Claude-Session" in err, cmd
+
+
+def test_pre_tool_use_lets_the_repair_through():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        for cmd in ("git status", "git log --oneline", "git rebase -i HEAD~1",
+                    "git commit --amend --signoff", "gh pr view 7"):
+            code, err = run_hook(repo, command=cmd, event="PreToolUse")
+            assert code == 0, (cmd, err)
+
+
+def test_pre_tool_use_allows_a_clean_push():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: clean\n\nAssisted-by: LLM\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="git push origin feature", event="PreToolUse")
+        assert code == 0, err
+        assert err == ""
+
+
+def test_recipe_rewrites_only_own_commits():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: theirs\n\nClaude-Session: https://x/theirs\n", author=FOREIGN)
+        commit(repo, "feat: mine\n\nAssisted-By: Claude <noreply@anthropic.com>\nClaude-Session: https://x/mine\n")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        recipe = recipe_from(err)
+        assert "test@example.com" in recipe
+        done = subprocess.run(recipe, shell=True, cwd=repo, env=GIT_ENV, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+        log = subprocess.run(["git", "-C", repo, "log", "--format=%x1e%an%x1f%B", "origin/main..HEAD"],
+                             env=GIT_ENV, capture_output=True, text=True, check=True).stdout
+        records = [r.split("\x1f", 1) for r in log.split("\x1e") if r.strip()]
+        by_author = {name.strip(): body for name, body in records}
+        theirs = by_author["Someone Else"]
+        assert "Claude-Session: https://x/theirs" in theirs
+        assert "Signed-off-by" not in theirs
+        mine = by_author["Test User"]
+        assert "Claude-Session" not in mine
+        assert "Assisted-by: LLM" in mine
+        assert mine.count("Signed-off-by:") == 1
+        code, err = run_hook(repo)
+        assert code == 0, err
+
+
+def test_recipe_without_identity_touches_every_commit():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        git(repo, "config", "--unset", "user.email")
+        commit(repo, "feat: theirs\n\nClaude-Session: https://x/theirs\n", author=FOREIGN)
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "%ae" not in recipe_from(err)
 
 
 if __name__ == "__main__":
