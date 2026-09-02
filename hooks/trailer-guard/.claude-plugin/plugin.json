@@ -1,0 +1,9 @@
+{
+  "name": "trailer-guard",
+  "version": "2.0.0",
+  "description": "PostToolUse hook that guards commit trailers on the current branch — fires after every git command and flags your own commits that lost Signed-off-by, carry a Claude-Session line, or name a model in Assisted-by instead of the neutral Assisted-by: LLM",
+  "author": {
+    "name": "Aleksei Sviridkin",
+    "email": "f@lex.la"
+  }
+}

@@ -1,9 +1,0 @@
-{
-  "name": "dco-guard",
-  "version": "1.0.0",
-  "description": "PostToolUse hook that catches commits missing the Signed-off-by trailer — fires after every git command, stays silent in repositories that don't sign off, and suggests git rebase --signoff to repair",
-  "author": {
-    "name": "Aleksei Sviridkin",
-    "email": "f@lex.la"
-  }
-}

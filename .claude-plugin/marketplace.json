@@ -131,9 +131,9 @@
       "category": "productivity"
     },
     {
-      "name": "dco-guard",
-      "description": "PostToolUse hook that catches commits missing the Signed-off-by trailer — fires after every git command, stays silent in repositories that don't sign off, and suggests git rebase --signoff to repair",
-      "source": "./hooks/dco-guard",
+      "name": "trailer-guard",
+      "description": "PostToolUse hook that guards commit trailers on the current branch — fires after every git command and flags your own commits that lost Signed-off-by, carry a Claude-Session line, or name a model in Assisted-by instead of the neutral Assisted-by: LLM",
+      "source": "./hooks/trailer-guard",
       "category": "quality"
     },
     {
@@ -181,6 +181,7 @@
     }
   ],
   "renames": {
+    "dco-guard": "trailer-guard",
     "chart-builder": "become",
     "code-guardian": "become",
     "doc-curator": "become",
