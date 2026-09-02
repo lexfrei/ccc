@@ -42,7 +42,7 @@ The ten standalone agent plugins are gone. Nine of their agents ship inside **be
 
 | Plugin | Description |
 | --- | --- |
-| **review-toolkit** | Code review pipeline: branch review with merge-base attribution (only defects the diff introduced, worsened, or interacts with block; pre-existing ones are reported separately and never dropped), churn diagnostics for review loops, PR review with a readiness gate (fix-CI / fix-conflicts, no verdict), a value/design gate (should this change exist at all — value vs maintenance cost), dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification |
+| **review-toolkit** | Code review pipeline with a provenance gate (model-advertising trailers, session links, WHAT-narrating messages and comments, undisclosed machine authorship all block): branch review with merge-base attribution (only defects the diff introduced, worsened, or interacts with block; pre-existing ones are reported separately and never dropped), churn diagnostics for review loops, PR review with a readiness gate (fix-CI / fix-conflicts, no verdict), a value/design gate (should this change exist at all — value vs maintenance cost), dual-model analysis (Claude + Codex), and GitHub PR review publishing with evidence-based verification |
 | **address-pr-comments** | Close out unresolved review comments across one or more PRs — verify, fix with auto-pushed signed commits (one per thread), post user-approved replies, restore original branch |
 | **git-tools** | Git workflow utilities: fork refresh and repo setup with branch protection |
 | **genname** | Generate a `/rename` command from type, title, and optional PR number |
