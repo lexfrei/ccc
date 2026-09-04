@@ -1,7 +1,7 @@
 {
   "name": "trailer-guard",
-  "version": "2.1.0",
-  "description": "Hook that guards commit trailers on the current branch: after every git command it flags your own commits that lost Signed-off-by, carry a Claude-Session line, or name a model in Assisted-by instead of the neutral Assisted-by: LLM, and it blocks git push and gh pr create/ready/merge until they are fixed; the repair recipe rewrites only your commits",
+  "version": "2.2.0",
+  "description": "Hook that guards commit trailers on the current branch: after every git command it flags your own commits that lost Signed-off-by, carry a Claude-Session line, or name a model in Assisted-by instead of the neutral Assisted-by: LLM, and it blocks git push, gh pr create/ready/merge and gh stack submit/sync/push/merge until they are fixed; a branch stacked on another local branch is judged and repaired from that branch's tip, and the repair recipe rewrites only your commits",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
