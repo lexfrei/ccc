@@ -1,7 +1,7 @@
 {
   "name": "pore-analysis",
-  "version": "1.0.0",
-  "description": "Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi coordination, radial g(r) and orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. Calibrates from the scale bar, segments pores, outputs a report, figures, and a per-pore CSV. Built-in trust layer refuses to guess — it stops and asks when the scale bar is ambiguous (e.g. a text label plate) or the numbers contradict physics.",
+  "version": "1.0.1",
+  "description": "Measure porosity, pore size/shape, lattice period and ordering (psi6, Voronoi coordination, radial g(r) and orientational correlation length) from top-view SEM images of porous films such as anodic aluminium oxide. The agent reads the image to calibrate and crop; a Python core does the morphometry and flags results that contradict physics. Vision decides, Python computes — no hardcoded autodetect, so it adapts to different instruments and scale-bar formats.",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"

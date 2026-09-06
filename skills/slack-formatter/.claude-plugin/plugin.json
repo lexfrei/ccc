@@ -1,7 +1,7 @@
 {
   "name": "slack-formatter",
-  "version": "1.0.0",
-  "description": "Copy markdown to macOS clipboard as rich HTML + plain text, ready for Cmd+V into Slack with formatting preserved",
+  "version": "1.0.1",
+  "description": "Copy markdown to macOS clipboard as rich HTML + plain-text fallback, ready for Cmd+V into Slack with formatting preserved",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
