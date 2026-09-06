@@ -34,7 +34,7 @@ Know the gaps, because each one is a place the validator says "passed" over a br
 ## Content Guidelines
 
 - Agent prompts are standalone markdown files — they define persona, workflow, and constraints. Keep the frontmatter minimal: a plugin-shipped agent drops `hooks`, `mcpServers`, and `permissionMode`, and `tools` is omitted so an agent inherits the full toolset, because a per-agent allowlist fails by omission and silently
-- Skill prompts use SKILL.md with frontmatter (name, description, triggers)
+- Skill prompts use SKILL.md with frontmatter (`name`, `description`); the conditions that fire a skill live as `TRIGGER:` prose inside the description, not as a separate key
 - MCP plugins reference external Docker images via `.mcp.json` config
 - Hook plugins define lifecycle hooks in `hooks/hooks.json` with optional scripts
 - All content in English
