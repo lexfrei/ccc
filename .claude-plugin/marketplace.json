@@ -119,7 +119,7 @@
     },
     {
       "name": "macro-claude",
-      "description": "Session status hooks for the macro-claude macropad plugin — writes per-session JSON so the MX Creative Console shows live Claude Code state",
+      "description": "Session status hooks for macro-claude macropad plugin — writes per-session JSON files that the Logi Plugin Service plugin reads to display live state on MX Creative Console keys",
       "source": "./hooks/macro-claude",
       "category": "productivity",
       "homepage": "https://github.com/lexfrei/macro-claude"

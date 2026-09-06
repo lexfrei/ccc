@@ -14,13 +14,9 @@ description: >
 
 # worksync — log a sync-worthy entry
 
-Appends a single timestamped bullet to today's note at
-`${WORKSYNC_VAULT_DIR:-$HOME/worksync}/YYYY-MM-DD.md` via the bundled helper
-script `${CLAUDE_PLUGIN_ROOT}/scripts/worksync-append.sh`.
+Appends a single timestamped bullet to today's note at `${WORKSYNC_VAULT_DIR:-$HOME/worksync}/YYYY-MM-DD.md` via the bundled helper script `${CLAUDE_PLUGIN_ROOT}/scripts/worksync-append.sh`.
 
-The file's purpose: a low-friction daily log of things the user will want to
-mention at a work sync, standup, or weekly review. Phrase entries for a
-technical peer audience.
+The file's purpose: a low-friction daily log of things the user will want to mention at a work sync, standup, or weekly review. Phrase entries for a technical peer audience.
 
 ## Arguments
 
@@ -38,27 +34,19 @@ Supported types (passed as first arg to the helper):
 | `checkpoint` | User-requested mid-task marker ("log this", "checkpoint").               |
 | `note`       | Anything else worth mentioning that doesn't fit the above.               |
 
-Types `pr`, `issue`, `merge` are **reserved for the automatic hook** — do not
-emit them from the skill. If the user explicitly asks to log one manually, use
-`note` and include the URL in the message.
+Types `pr`, `issue`, `merge` are **reserved for the automatic hook** — do not emit them from the skill. If the user explicitly asks to log one manually, use `note` and include the URL in the message.
 
 ## Inferring content (no arguments case)
 
-When invoked with no arguments, scan the most recent turns of the current
-session and produce ONE entry summarizing the most recent sync-worthy event.
-Do not produce multiple entries in one invocation — call the skill again if
-more is needed.
+When invoked with no arguments, scan the most recent turns of the current session and produce ONE entry summarizing the most recent sync-worthy event. Do not produce multiple entries in one invocation — call the skill again if more is needed.
 
 Selection priority (pick the most recent qualifying item):
 
-1. An `ops` action that visibly succeeded (deploy, apply, rollout, migration,
-   infrastructure reconfiguration, provisioning run against real hosts).
-2. A `research` conclusion — user asked a question, you investigated, you
-   reached a definite answer or recommendation.
+1. An `ops` action that visibly succeeded (deploy, apply, rollout, migration, infrastructure reconfiguration, provisioning run against real hosts).
+2. A `research` conclusion — user asked a question, you investigated, you reached a definite answer or recommendation.
 3. A `checkpoint` the user explicitly requested.
 
-Skip if the most recent activity was just reading/exploring without producing
-a decision or action — nothing to log yet.
+Skip if the most recent activity was just reading/exploring without producing a decision or action — nothing to log yet.
 
 ## Message format
 
@@ -79,34 +67,27 @@ Bad examples (do not emit):
 
 ## Execution
 
-Run the helper script. Do not write to the file directly — the helper handles
-directory creation, date-based filenames, and deduplication.
+Run the helper script. Do not write to the file directly — the helper handles directory creation, date-based filenames, and deduplication.
 
 ```bash
 "${CLAUDE_PLUGIN_ROOT}/scripts/worksync-append.sh" <type> "<message>"
 ```
 
-Exit on failure is fine — surface the error to the user. On success, reply
-with one short line: which file was updated and what was logged.
+Exit on failure is fine — surface the error to the user. On success, reply with one short line: which file was updated and what was logged.
 
 ## Redaction rules
 
 Before appending, strip or rewrite:
 
-- Customer, client, or project names → generic labels ("production cluster",
-  "test environment", "a customer request").
+- Customer, client, or project names → generic labels ("production cluster", "test environment", "a customer request").
 - Internal hostnames or cluster identifiers that reveal topology → generic.
 - Credentials, tokens, private IP addresses, internal URLs.
 
-If the event cannot be described without private details, log a vague version
-("reviewed an internal auth change") rather than skipping — the user still
-wants a timestamp marker they can expand on verbally at the sync.
+If the event cannot be described without private details, log a vague version ("reviewed an internal auth change") rather than skipping — the user still wants a timestamp marker they can expand on verbally at the sync.
 
 ## Configuration
 
-Users can point the note directory at any location by exporting
-`WORKSYNC_VAULT_DIR` in their shell, Claude `settings.json` `env` block, or a
-project `.env`. Common targets:
+Users can point the note directory at any location by exporting `WORKSYNC_VAULT_DIR` in their shell, Claude `settings.json` `env` block, or a project `.env`. Common targets:
 
 - `~/Documents/Obsidian/MyVault/worksync` — Obsidian vault subfolder
 - `~/Library/Mobile Documents/iCloud~md~obsidian/Documents/<vault>/worksync` — macOS iCloud-synced Obsidian vault
