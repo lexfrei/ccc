@@ -85,13 +85,10 @@ When 1.5a or 1.5b fires, STOP before Step 2 — do NOT run `/branch-review`, Cod
 - What blocks readiness: the conflict and/or the specific failing checks, named.
 - The concrete ask: rebase/resolve conflicts, fix the named checks, then re-request review.
 - Nothing about code quality — you have not reviewed it and must not imply you have.
-- A hidden marker as the LAST line so a later run can positively recognise this as a gate note (not a real review) before reusing it: the literal HTML comment `<!-- readiness-gate-note -->`. It renders invisibly on GitHub and names no tool.
 
 Example note (gate form):
 
 > This PR isn't ready for review yet. CI is red on checks that look code-related — `build`, `test (integration)` — and the branch has merge conflicts with `main`. Please rebase to resolve the conflicts, get those checks green, then re-request review. I haven't looked at the code itself yet.
->
-> `<!-- readiness-gate-note -->`
 
 Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE` / `REQUEST_CHANGES`. In default (draft) mode the note is simply reported to the user and the skill stops.
 
@@ -394,7 +391,7 @@ If `--publish` **was** passed: this output is now an approval gate. Wait for exp
 
 ## Step 9: Publish (only when `--publish` was passed AND user approved in Step 8)
 
-**Gate mode (Step 1.5):** skip 9a (no tracking issues) AND 9b.5 (gate mode never ran Step 2, so there is no business context to reconcile — the readiness note carries none). Post a single `COMMENT`-event review carrying the readiness note (with the `<!-- readiness-gate-note -->` marker from Step 1.5c) — no inline comments, no verdict word. 9b still applies with `INTENDED_STATE=COMMENTED`, but with one extra guard: reuse the latest review only if it is already `COMMENTED` AND its body contains that marker, positively identifying it as a prior gate note. Do NOT identify a gate note by inline-comment count — a user-requested comment-only code review can carry findings in its summary with zero inline comments, and a body-only PUT would overwrite it and destroy those findings. Without the marker, create a NEW review. Check with `gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews/$LATEST_REVIEW_ID" --jq '.body' | grep -q -- '<!-- readiness-gate-note -->'`. Also run 9b's lingering-approval check (a prior `EFFECTIVE_VERDICT == APPROVED` survives this comment).
+**Gate mode (Step 1.5):** skip 9a (no tracking issues) AND 9b.5 (gate mode never ran Step 2, so there is no business context to reconcile — the readiness note carries none). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-approval check still applies (a prior `EFFECTIVE_VERDICT == APPROVED` survives this comment).
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
@@ -415,49 +412,28 @@ print("Issue URL:", data["html_url"])
 
 Capture each URL and splice it into the review body under the relevant non-blocking follow-up.
 
-### 9b. Check for existing review by current user
+### 9b. Read your prior reviews on this PR
 
-Multiple reviews from the same user clutter the timeline, so reuse one when possible — but the update endpoint in 9c (`PUT .../reviews/{id}`) changes ONLY the body, never the event. A submitted review's event/state is immutable, and only the user's LATEST non-dismissed review is effective on GitHub. Updating an OLDER same-state review does not change the effective verdict — e.g. after `CHANGES_REQUESTED` then `APPROVED`, refreshing the old `CHANGES_REQUESTED` body leaves the newer `APPROVED` in force. So reuse is safe ONLY when the LATEST non-dismissed review already carries the state you intend to publish; in every other case POST a NEW review (9c), which becomes the new effective verdict.
-
-Fetch the latest non-dismissed review ONCE — its id, state, and body (the body also feeds 9b.5) — then decide reuse vs new against its state:
+Every publish POSTs a NEW review; a submitted one is never edited (see **Never update a published review** below). Prior reviews are still read here for two reasons: 9b.5 needs whatever business context is already recorded, and a lingering approval needs surfacing.
 
 ```bash
-# INTENDED_STATE is derived from the event this run will publish:
-#   LGTM → APPROVED   NOT LGTM → CHANGES_REQUESTED
-#   gate mode OR user-requested comment-only → COMMENTED
-INTENDED_STATE=APPROVED
 ME=$(gh api user --jq .login)
 # --paginate --slurp so a PR with >30 reviews does not silently truncate to page 1. `gh api` rejects --slurp together with --jq, so filter with a separate jq; .[][] flattens the array-of-pages into a flat, chronologically-ordered list.
 MY_REVIEWS=$(gh api --paginate --slurp "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" | jq -c "[.[][] | select(.user.login == \"$ME\") | select(.state != \"DISMISSED\")]")
 
-# Latest non-dismissed review of ANY state — drives same-state reuse and 9b.5 context.
-LATEST_REVIEW=$(jq -c 'last // empty' <<<"$MY_REVIEWS")
-LATEST_REVIEW_ID=$(jq -r '.id // empty' <<<"$LATEST_REVIEW")
-LATEST_REVIEW_STATE=$(jq -r '.state // empty' <<<"$LATEST_REVIEW")
-
 # EFFECTIVE verdict on GitHub ignores COMMENTED — it is the latest APPROVED /
-# CHANGES_REQUESTED, which can be OLDER than LATEST_REVIEW. Used only to detect a
-# lingering approval a gate COMMENT would not dismiss.
+# CHANGES_REQUESTED, which can be OLDER than the latest review of any state. Used only to
+# detect a lingering approval a COMMENT would not dismiss.
 EFFECTIVE_VERDICT=$(jq -r '[.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED")] | last | .state // empty' <<<"$MY_REVIEWS")
-
-# Reuse (PUT body) ONLY when the latest review already has INTENDED_STATE; else POST new.
-# Gate mode (INTENDED_STATE=COMMENTED) adds one condition — the body must carry the
-# <!-- readiness-gate-note --> marker — so reuse there is safe only when that guard also
-# passes; see the Step 9 gate-mode paragraph before reusing a COMMENTED review.
-if [ -n "$LATEST_REVIEW_ID" ] && [ "$LATEST_REVIEW_STATE" = "$INTENDED_STATE" ]; then
-  EXISTING_REVIEW_ID=$LATEST_REVIEW_ID
-else
-  EXISTING_REVIEW_ID=
-fi
 ```
 
-If `EXISTING_REVIEW_ID` is empty, POST a new review in 9c; leave the older review in the timeline as history. One caveat GitHub imposes: a `COMMENT` review never dismisses a prior `APPROVED` state, and that approval can be an OLDER review than the latest `COMMENTED` one — so `LATEST_REVIEW` alone will miss it. When this run publishes a `COMMENT` (gate mode or user-requested comment-only) and `EFFECTIVE_VERDICT == APPROVED`, the approval keeps counting under branch protection even after the new comment posts. Surface this to the user so they can decide whether to dismiss the stale approval — do not dismiss it silently. (`NOT LGTM` → `CHANGES_REQUESTED` supersedes a prior approval, so it needs no dismissal.)
+Older reviews stay in the timeline as history — the new one becomes the effective verdict. One caveat GitHub imposes: a `COMMENT` review never dismisses a prior `APPROVED` state, and that approval can sit several reviews back, which is why `EFFECTIVE_VERDICT` scans the whole list rather than the latest entry. When this run publishes a `COMMENT` (gate mode or user-requested comment-only) and `EFFECTIVE_VERDICT == APPROVED`, the approval keeps counting under branch protection even after the new comment posts. Surface this to the user so they can decide whether to dismiss the stale approval — do not dismiss it silently. (`NOT LGTM` → `CHANGES_REQUESTED` supersedes a prior approval, so it needs no dismissal.)
 
 ### 9b.5 Business context continuity
 
 The business context (the WHY from Step 2) is stated in full **once** — in the first review this skill publishes on the PR. On every later publish, reconcile against what was already posted:
 
-1. Find the *previously recorded context* by searching backward through `$MY_REVIEWS` (from 9b) for the most recent body that actually carries a `**Business context**:` or `**Business context update**:` line — NOT just `$LATEST_REVIEW`, because a later gate-mode `COMMENTED` note carries no context and would otherwise read as "no context recorded", duplicating the full sentence on the next publish:
+1. Find the *previously recorded context* by searching backward through `$MY_REVIEWS` (from 9b) for the most recent body that actually carries a `**Business context**:` or `**Business context update**:` line — NOT just the latest review, because a later gate-mode `COMMENTED` note carries no context and would otherwise read as "no context recorded", duplicating the full sentence on the next publish:
 
    ```bash
    PRIOR_CONTEXT_BODY=$(jq -r '[.[] | select(.body | test("\\*\\*Business context"))] | last | .body // empty' <<<"$MY_REVIEWS")
@@ -466,28 +442,21 @@ The business context (the WHY from Step 2) is stated in full **once** — in the
    Extract the context line from `$PRIOR_CONTEXT_BODY`; if it is empty, no context was recorded yet.
 2. Decide how this publish renders the context:
    - **No prior context recorded** → include the full `**Business context**: <sentence>` line.
-   - **Unchanged from the prior** → when updating that same review in place, keep the existing full line (it is the canonical home); when posting a NEW review, omit the line entirely (it is already stated upstream in the timeline).
+   - **Unchanged from the prior** → omit the line entirely; it is already stated upstream in the timeline.
    - **Changed from the prior** → replace it with `**Business context update**: <what changed> (previously: <prior sentence>)`. Never silently swap in a fresh full sentence — always show the delta against the recorded context.
 
 This keeps the WHY from being repeated verbatim across re-runs while still surfacing a genuine change in framing.
 
-### 9c. Update or create
+### 9c. Create the review
 
-If updating:
-
-```bash
-gh api --method PUT "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews/$EXISTING_REVIEW_ID" \
-  --field body="<new review body>"
-```
-
-If creating, use python3 + `json.dumps` (shell escaping of complex review bodies is unreliable):
+Always POST, never PUT. Use python3 + `json.dumps` (shell escaping of complex review bodies is unreliable):
 
 ```python
 import json, subprocess
 
 review = {
     "commit_id": "<latest PR head SHA>",
-    "event": "APPROVE",  # APPROVE for LGTM, REQUEST_CHANGES for NOT LGTM, COMMENT for gate mode (Step 1.5) or a user-requested comment-only review. Must match INTENDED_STATE from 9b.
+    "event": "APPROVE",  # APPROVE for LGTM, REQUEST_CHANGES for NOT LGTM, COMMENT for gate mode (Step 1.5) or a user-requested comment-only review.
     "body": "<review body — first line is `LGTM — ...` or `NOT LGTM — ...`; EXCEPT in gate mode (event COMMENT), where the body is the readiness note with NO verdict word>",
     "comments": [
         {
@@ -505,7 +474,7 @@ subprocess.run(
 )
 ```
 
-After publishing or updating, print the review URL so the user can verify it rendered correctly.
+After publishing, print the review URL so the user can verify it rendered correctly.
 
 ## Important Rules
 
@@ -526,5 +495,5 @@ After publishing or updating, print the review URL so the user can verify it ren
 - **Respect existing reviews**: read existing review comments. Do not repeat points already raised by other reviewers unless adding new evidence.
 - **No private infrastructure details**: never mention cluster names, client names, internal IPs, or environment identifiers.
 - **No internal tool names**: do not name slash commands, skills, or plugin paths in the published body.
-- **Update, don't duplicate — but only within the same state**: reuse (PUT body) your existing review ONLY when your LATEST non-dismissed review already carries the state you intend to publish (Step 9b). Across a verdict change (e.g. `CHANGES_REQUESTED` → `APPROVED`) POST a new review — the update endpoint cannot change a submitted review's event, so updating the old body would leave GitHub showing the old verdict.
+- **Never update a published review**: `PUT .../reviews/{id}` is forbidden in every mode, including a re-review that lands the same verdict as the last one. A submitted review is a dated statement someone already read and possibly replied to; rewriting its body edits that history and, because the endpoint cannot change the event, can leave the body and the GitHub verdict label disagreeing. Every publish POSTs a new review, which becomes the effective verdict and leaves each earlier round readable in the timeline.
 - **Always use `origin/` refs**: when computing diffs locally, ALWAYS use `origin/<branch>`. Bare branch names go stale and produce phantom diffs.
