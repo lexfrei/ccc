@@ -126,30 +126,36 @@ def override(cwd):
     return (merge_base, value) if merge_base else None
 
 
+def local_tips(cwd):
+    """{commit: [local branch names]} for every local branch tip.
+
+    Read from the ref store, not from `%D`: `--decorate-refs` does not reach
+    `%D` before git 2.35, and there only when stdout is a terminal, so a piped
+    call gets remote-tracking refs anyway. This branch's own pushed copy would
+    then close the layer and the commits it already published would drop out of
+    the judged range, which is the `@{upstream}` hazard. A ref name cannot hold
+    a space, so one separates the two fields; it can hold a comma, which is why
+    a decoration list cannot be split on one.
+    """
+    raw = git(["for-each-ref", "--format=%(objectname) %(refname:short)", "refs/heads/"], cwd)
+    tips = {}
+    for record in (raw or "").splitlines():
+        sha, _, name = record.partition(" ")
+        if sha and name:
+            tips.setdefault(sha, []).append(name)
+    return tips
+
+
 def first_parent_line(cwd, fork):
     """[(sha, [local branch names])] from HEAD down to (excluding) the fork.
 
-    One call, decorations restricted to local branches: remote-tracking refs
-    would put this branch's own pushed copy on the line, which is the
-    `@{upstream}` hazard again, and tags say nothing about ownership. Branches
-    above HEAD are not ancestors of HEAD and never appear.
+    Only local branches carry ownership: a tag says nothing about it, and a
+    remote-tracking ref is the `@{upstream}` hazard again. Branches above HEAD
+    are not ancestors of HEAD and never appear.
     """
-    raw = git(
-        ["log", "--first-parent", "--decorate-refs=refs/heads/", "--format=%H%x1f%D", f"{fork}..HEAD"],
-        cwd,
-    )
-    line = []
-    for record in (raw or "").splitlines():
-        sha, _, decoration = record.partition("\x1f")
-        names = []
-        for name in decoration.split(","):
-            name = name.strip()
-            if name.startswith("HEAD -> "):
-                name = name[len("HEAD -> "):]
-            if name and name != "HEAD":
-                names.append(name)
-        line.append((sha, names))
-    return line
+    raw = git(["log", "--first-parent", "--format=%H", f"{fork}..HEAD"], cwd)
+    tips = local_tips(cwd)
+    return [(sha, tips.get(sha, [])) for sha in (raw or "").splitlines()]
 
 
 def layers(cwd):

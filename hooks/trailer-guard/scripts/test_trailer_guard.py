@@ -461,6 +461,29 @@ def test_post_tool_use_fires_after_gh_stack_commands():
         code, err = run_hook(repo, command="gh pr view 7")
         assert code == 0, err
 
+def test_a_remote_tracking_ref_is_not_a_parent():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        git(repo, "update-ref", "refs/remotes/origin/feature", "HEAD")
+        commit(repo, "feat: clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "feat: leaks" in err
+
+
+def test_a_parent_name_with_a_comma_is_reported_whole():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        git(repo, "branch", "--move", "feature", "feat/a,b")
+        commit(repo, LEAKY)
+        git(repo, "checkout", "--quiet", "-b", "part-2")
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="gh stack submit", event="PreToolUse")
+        assert code == 2, err
+        assert "`feat/a,b`" in err
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
