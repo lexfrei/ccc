@@ -302,6 +302,7 @@ def test_stacked_branch_is_judged_from_its_parent():
         code, err = run_hook(repo)
         assert code == 0, err
         assert err == ""
+        git(repo, "update-ref", "refs/remotes/origin/part-1", "part-1")
         code, err = run_hook(repo, command="git push origin part-2", event="PreToolUse")
         assert code == 0, err
         git(repo, "checkout", "--quiet", "part-1")
@@ -482,6 +483,35 @@ def test_a_parent_name_with_a_comma_is_reported_whole():
         code, err = run_hook(repo, command="gh stack submit", event="PreToolUse")
         assert code == 2, err
         assert "`feat/a,b`" in err
+
+
+def test_push_blocks_a_lower_layer_that_is_on_no_remote():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="git push origin part-2", event="PreToolUse")
+        assert code == 2, err
+        assert "`part-1`" in err
+        assert "lower leaks" in err
+        assert not [line for line in err.splitlines() if line.startswith("git rebase ")], err
+        code, err = run_hook(repo)
+        assert code == 0, err
+        git(repo, "update-ref", "refs/remotes/origin/part-1", "part-1")
+        code, err = run_hook(repo, command="git push origin part-2", event="PreToolUse")
+        assert code == 0, err
+
+
+def test_commit_on_local_main_is_not_hidden_by_a_branch_above_it():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        git(repo, "checkout", "--quiet", "main")
+        commit(repo, "feat: leaks on main\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        git(repo, "checkout", "--quiet", "-b", "feature-above")
+        commit(repo, "feat: clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="git push origin feature-above", event="PreToolUse")
+        assert code == 2, err
+        assert "leaks on main" in err
+        assert "`main`" in err
 
 
 if __name__ == "__main__":

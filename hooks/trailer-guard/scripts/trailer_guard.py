@@ -29,10 +29,12 @@ identity every commit is judged and rewritten.
 
 The judged range is what the command publishes. A branch that sits on another
 local branch (a stacked PR, native or hand-chained) is judged from that
-branch's tip, so the layer below is neither judged nor rewritten from here.
-Commands that push a whole stack are judged from the integration branch, and
-defects in a lower layer are attributed to the branch that owns them instead
-of getting a recipe that would rewrite that layer inside this one.
+branch's tip, so the layer below is never rewritten from here. That layer is
+still judged while the command would publish it for the first time; once it is
+on a remote it belongs to its own branch's guard. Commands that push a whole
+stack judge every layer. Either way a lower layer's defects are attributed to
+the branch that owns them instead of getting a recipe that would rewrite that
+layer inside this one.
 
 The sign-off check only speaks up in repositories that already sign off (the
 upstream base carries trailers). The Claude-Session and Assisted-by checks
@@ -144,6 +146,11 @@ def local_tips(cwd):
         if sha and name:
             tips.setdefault(sha, []).append(name)
     return tips
+
+
+def published(cwd, sha):
+    """Whether some remote-tracking ref already contains this commit."""
+    return bool(git(["for-each-ref", "--count=1", "--contains", sha, "refs/remotes/"], cwd))
 
 
 def first_parent_line(cwd, fork):
@@ -334,27 +341,37 @@ def lower_layer_report(root, lower, upper, owner, me, dco):
     )
 
 
-def reports_for(root, whole_stack):
+def reports_for(root, whole_stack, publishing):
     me = git(["config", "user.email"], root) or ""
     partition, dco_base = layers(root)
     if not partition:
         return []
     dco = signs_off(root, dco_base)
 
-    own = partition[0]
-    if not whole_stack:
-        return own_layer_reports(root, own[0], me, dco, "")
-
     hint = ""
-    if len(partition) == 1:
+    if whole_stack and len(partition) == 1:
         branch = git(["symbolic-ref", "--short", "--quiet", "HEAD"], root) or "<branch>"
         hint = (
             "\nNo local branch lies beneath this one, so the whole range counts as this branch. "
             "If it sits on another branch, rebase onto that branch first (`gh stack rebase` or "
             f"`git rebase <parent>`), or record it: `git config branch.{branch}.{OVERRIDE_KEY} <parent>`."
         )
-    reports = own_layer_reports(root, own[0], me, dco, hint)
+    reports = own_layer_reports(root, partition[0][0], me, dco, hint)
+    if not publishing:
+        # Nothing leaves the machine, so a layer this branch does not own is not
+        # this command's business; the guard on that branch reports it.
+        return reports
     for lower, upper, owner in partition[1:]:
+        # A push carries the whole ancestry, so a layer that is on no remote yet
+        # is published by it and has to be judged here. One that is already
+        # there gains nothing from this push, and holding the branch for a
+        # defect it does not own is what judging from the integration branch
+        # used to do. Layers run nearest first along the first-parent line, so
+        # every layer below a published one is an ancestor of it and published
+        # too: stop rather than ask again. A stack-wide command re-pushes every
+        # layer and skips none.
+        if not whole_stack and published(root, upper):
+            break
         report = lower_layer_report(root, lower, upper, owner, me, dco)
         if report:
             reports.append(report)
@@ -372,10 +389,11 @@ def main():
     command = (payload.get("tool_input") or {}).get("command", "")
     event = payload.get("hook_event_name") or "PostToolUse"
 
-    whole_stack = False
+    whole_stack = publishing = False
     if event == "PreToolUse":
         if not PUBLISH_RE.search(command):
             return 0
+        publishing = True
         whole_stack = bool(STACK_PUBLISH_RE.search(command))
     elif not LOCAL_RE.search(command):
         return 0
@@ -385,7 +403,7 @@ def main():
     if not root:
         return 0
 
-    reports = reports_for(root, whole_stack)
+    reports = reports_for(root, whole_stack, publishing)
     if not reports:
         return 0
 
