@@ -15,7 +15,7 @@ Two hook events, one script, told apart by `hook_event_name`:
   branch (exit 2, so the report reaches the model) but change nothing. Early
   warning.
 - PreToolUse before a command that publishes commits (`git push`, `gh pr
-  create|ready|merge`, `gh stack submit|sync|push|merge`): deny the command
+  create|ready|merge`, `gh stack submit|sync|push|merge|link`): deny the command
   while defects remain (exit 2). The repair commands themselves (amend,
   rebase, status, log, `gh stack rebase`) are never blocked, otherwise the
   guard would stand between the author and the fix.
@@ -57,10 +57,11 @@ OVERRIDE_KEY = "trailerGuardBase"
 SESSION_RE = re.compile(r"claude-session", re.IGNORECASE)
 ASSISTED_RE = re.compile(r"^assisted-by:\s*(?P<value>.*?)\s*$", re.IGNORECASE | re.MULTILINE)
 LOCAL_RE = re.compile(r"\bgit\b|\bgh\s+stack\b")
-# Native-stack commands that push every branch of the stack; sync does so with
-# --force-with-lease and is the main push path of a stack. `gh stack rebase`
-# is local and is the stack's repair step.
-STACK_PUBLISH_RE = re.compile(r"\bgh\s+stack\s+(submit|sync|push|merge)\b")
+# Native-stack commands that publish every branch of the stack; sync does so
+# with --force-with-lease and is the main push path of a stack, and link pushes
+# each branch it is handed before looking up its PR. `gh stack rebase` is local
+# and is the stack's repair step.
+STACK_PUBLISH_RE = re.compile(r"\bgh\s+stack\s+(submit|sync|push|merge|link)\b")
 PUBLISH_RE = re.compile(
     r"\bgit\b[^|;&\n]*\bpush\b|\bgh\s+pr\s+(create|ready|merge)\b|" + STACK_PUBLISH_RE.pattern
 )

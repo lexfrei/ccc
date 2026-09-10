@@ -8,7 +8,7 @@ Rewriting a commit message replaces it whole, so any path that supplies fresh te
 
 ## How it works
 
-One script, two hook events. As a `PostToolUse` hook it runs after any `Bash` tool call containing `git` or `gh stack`, inspects the commits the current branch added over its base, and reports defects so the model sees them at once. As a `PreToolUse` hook it runs before `git push`, `gh pr create`, `gh pr ready`, `gh pr merge`, `gh stack submit`, `gh stack sync`, `gh stack push` and `gh stack merge`, and denies the command while defects remain. Amend, rebase, status, log and `gh stack rebase` are never blocked, so the guard never stands between you and the fix. Both fire on the result rather than on the shape of the command, which covers every rewrite mechanism, including ones not invented yet.
+One script, two hook events. As a `PostToolUse` hook it runs after any `Bash` tool call containing `git` or `gh stack`, inspects the commits the current branch added over its base, and reports defects so the model sees them at once. As a `PreToolUse` hook it runs before `git push`, `gh pr create`, `gh pr ready`, `gh pr merge`, `gh stack submit`, `gh stack sync`, `gh stack push`, `gh stack merge` and `gh stack link`, and denies the command while defects remain. Amend, rebase, status, log and `gh stack rebase` are never blocked, so the guard never stands between you and the fix. Both fire on the result rather than on the shape of the command, which covers every rewrite mechanism, including ones not invented yet.
 
 Three decisions keep it quiet in the right places.
 
@@ -30,7 +30,7 @@ The base is resolved in a fixed order, and never by trying candidates until one 
 
 Only local branches are candidates. A remote-tracking ref would put the branch's own pushed copy on the line, which is the `@{upstream}` hazard again. In a fresh clone where only the upper branch is checked out, create the parent branch locally or set the override. A parent that gained commits after the layer was cut, or was rewritten, leaves the line until the layer is rebased onto it (`gh stack rebase`, `gh stack sync`, or `git rebase <parent>`); until then the branch is judged from the integration fork, as before.
 
-Commands that publish a whole stack (`gh stack submit`, `sync`, `push`, `merge`) push every branch in it, so before them the guard judges every layer beneath HEAD. Defects in this branch get the usual recipe. Defects in a lower layer are listed under the branch that owns them, with no recipe: switch to that branch, where the guard prints the recipe for exactly those commits, then rebase the branches above it. Layers above HEAD cannot be seen, since stack membership lives on GitHub, so run stack commands from the top layer.
+Commands that publish a whole stack (`gh stack submit`, `sync`, `push`, `merge`, `link`) push every branch in it, so before them the guard judges every layer beneath HEAD. Defects in this branch get the usual recipe. Defects in a lower layer are listed under the branch that owns them, with no recipe: switch to that branch, where the guard prints the recipe for exactly those commits, then rebase the branches above it. Layers above HEAD cannot be seen, since stack membership lives on GitHub, so run stack commands from the top layer.
 
 ## Installation
 

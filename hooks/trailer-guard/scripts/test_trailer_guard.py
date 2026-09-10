@@ -404,7 +404,8 @@ def test_override_beats_the_nearest_parent():
         assert "lower leaks" in err
 
 
-STACK_PUBLISH = ("gh stack submit --auto --open", "gh stack sync", "gh stack push", "gh stack merge 7 --yes --merge")
+STACK_PUBLISH = ("gh stack submit --auto --open", "gh stack sync", "gh stack push",
+                 "gh stack merge 7 --yes --merge", "gh stack link part-1 part-2")
 STACK_LOCAL = ("gh stack rebase", "gh stack view", "gh stack add part-3", "gh stack checkout 3")
 
 
