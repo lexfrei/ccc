@@ -277,6 +277,243 @@ def test_recipe_without_identity_touches_every_commit():
         assert "%ae" not in recipe_from(err)
 
 
+
+def rev(repo, ref):
+    return subprocess.run(["git", "-C", repo, "rev-parse", ref], env=GIT_ENV,
+                          capture_output=True, text=True, check=True).stdout.strip()
+
+
+def make_stack(tmp, lower="feat: lower\n\n" + SIGNOFF + "\n"):
+    """make_repo, then part-1 with one commit and part-2 branched off its tip."""
+    repo = make_repo(tmp)
+    git(repo, "checkout", "--quiet", "-b", "part-1")
+    commit(repo, lower)
+    git(repo, "checkout", "--quiet", "-b", "part-2")
+    return repo
+
+
+LEAKY = "feat: lower leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/lower\n"
+
+
+def test_stacked_branch_is_judged_from_its_parent():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo)
+        assert code == 0, err
+        assert err == ""
+        git(repo, "update-ref", "refs/remotes/origin/part-1", "part-1")
+        code, err = run_hook(repo, command="git push origin part-2", event="PreToolUse")
+        assert code == 0, err
+        git(repo, "checkout", "--quiet", "part-1")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "lower leaks" in err
+
+
+def test_recipe_on_a_stack_leaves_the_parent_untouched():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp)
+        commit(repo, "feat: upper\n\nAssisted-By: Claude <noreply@anthropic.com>\n" + SIGNOFF + "\n")
+        parent = rev(repo, "part-1")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "feat: lower" not in err
+        recipe = recipe_from(err)
+        assert parent in recipe
+        done = subprocess.run(recipe, shell=True, cwd=repo, env=GIT_ENV, capture_output=True, text=True)
+        assert done.returncode == 0, done.stderr
+        assert rev(repo, "part-1") == parent
+        assert rev(repo, "HEAD~1") == parent
+        code, err = run_hook(repo)
+        assert code == 0, err
+
+
+def test_parent_tip_at_head_is_not_a_parent():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        git(repo, "branch", "backup")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "leaks" in err
+        git(repo, "checkout", "--quiet", "-b", "part-2")
+        code, err = run_hook(repo)
+        assert code == 2, err
+
+
+def test_nearest_parent_wins():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: mid leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/mid\n")
+        git(repo, "branch", "wip")
+        commit(repo, "feat: top\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo)
+        assert code == 0, err
+
+
+def test_detached_head_on_a_stack():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        git(repo, "checkout", "--quiet", "--detach")
+        code, err = run_hook(repo)
+        assert code == 0, err
+        commit(repo, "feat: detached leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/d\n")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "detached leaks" in err
+        assert "lower leaks" not in err
+
+
+def test_squash_merged_parent_stays_out_of_scope():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        git(repo, "checkout", "--quiet", "main")
+        commit(repo, "feat: lower (#1)\n\n" + SIGNOFF + "\n")
+        git(repo, "update-ref", "refs/remotes/origin/main", "HEAD")
+        git(repo, "checkout", "--quiet", "part-2")
+        code, err = run_hook(repo)
+        assert code == 0, err
+
+
+def test_override_sets_the_base():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        leaky = rev(repo, "HEAD")
+        commit(repo, "feat: clean\n\n" + SIGNOFF + "\n")
+        git(repo, "config", "branch.feature.trailerGuardBase", "no-such-ref")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        git(repo, "config", "branch.feature.trailerGuardBase", leaky)
+        code, err = run_hook(repo)
+        assert code == 0, err
+        git(repo, "config", "branch.feature.trailerGuardBase", "feature")
+        code, err = run_hook(repo)
+        assert code == 0, err
+
+
+def test_override_beats_the_nearest_parent():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        git(repo, "config", "branch.part-2.trailerGuardBase", "origin/main")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "lower leaks" in err
+
+
+STACK_PUBLISH = ("gh stack submit --auto --open", "gh stack sync", "gh stack push",
+                 "gh stack merge 7 --yes --merge", "gh stack link part-1 part-2")
+STACK_LOCAL = ("gh stack rebase", "gh stack view", "gh stack add part-3", "gh stack checkout 3")
+
+
+def test_pre_tool_use_blocks_stack_publishing_with_defects():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp)
+        commit(repo, "feat: upper leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        for cmd in STACK_PUBLISH:
+            code, err = run_hook(repo, command=cmd, event="PreToolUse")
+            assert code == 2, (cmd, err)
+            assert "the stack" in err, cmd
+            assert rev(repo, "part-1") in recipe_from(err), cmd
+        for cmd in STACK_LOCAL:
+            code, err = run_hook(repo, command=cmd, event="PreToolUse")
+            assert code == 0, (cmd, err)
+
+
+def test_stack_publish_names_the_lower_layer_instead_of_rewriting_it():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="gh stack submit", event="PreToolUse")
+        assert code == 2, err
+        assert "`part-1`" in err
+        assert "lower leaks" in err
+        assert not [l for l in err.splitlines() if l.startswith("git rebase ")], err
+        code, err = run_hook(repo, command="gh stack sync", event="PreToolUse")
+        assert code == 2, err
+        git(repo, "checkout", "--quiet", "part-1")
+        code, err = run_hook(repo, command="gh stack sync", event="PreToolUse")
+        assert code == 2, err
+        assert rev(repo, "origin/main") in recipe_from(err)
+
+
+def test_stack_publish_without_a_local_parent_hints_at_the_override():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        code, err = run_hook(repo, command="gh stack submit", event="PreToolUse")
+        assert code == 2, err
+        assert "branch.feature.trailerGuardBase" in err
+        code, err = run_hook(repo, command="git push", event="PreToolUse")
+        assert code == 2, err
+        assert "trailerGuardBase" not in err
+
+
+def test_post_tool_use_fires_after_gh_stack_commands():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        code, err = run_hook(repo, command="gh stack rebase")
+        assert code == 2, err
+        code, err = run_hook(repo, command="gh pr view 7")
+        assert code == 0, err
+
+def test_a_remote_tracking_ref_is_not_a_parent():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        git(repo, "update-ref", "refs/remotes/origin/feature", "HEAD")
+        commit(repo, "feat: clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo)
+        assert code == 2, err
+        assert "feat: leaks" in err
+
+
+def test_a_parent_name_with_a_comma_is_reported_whole():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        git(repo, "branch", "--move", "feature", "feat/a,b")
+        commit(repo, LEAKY)
+        git(repo, "checkout", "--quiet", "-b", "part-2")
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="gh stack submit", event="PreToolUse")
+        assert code == 2, err
+        assert "`feat/a,b`" in err
+
+
+def test_push_blocks_a_lower_layer_that_is_on_no_remote():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_stack(tmp, lower=LEAKY)
+        commit(repo, "feat: upper clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="git push origin part-2", event="PreToolUse")
+        assert code == 2, err
+        assert "`part-1`" in err
+        assert "lower leaks" in err
+        assert not [line for line in err.splitlines() if line.startswith("git rebase ")], err
+        code, err = run_hook(repo)
+        assert code == 0, err
+        git(repo, "update-ref", "refs/remotes/origin/part-1", "part-1")
+        code, err = run_hook(repo, command="git push origin part-2", event="PreToolUse")
+        assert code == 0, err
+
+
+def test_commit_on_local_main_is_not_hidden_by_a_branch_above_it():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        git(repo, "checkout", "--quiet", "main")
+        commit(repo, "feat: leaks on main\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        git(repo, "checkout", "--quiet", "-b", "feature-above")
+        commit(repo, "feat: clean\n\n" + SIGNOFF + "\n")
+        code, err = run_hook(repo, command="git push origin feature-above", event="PreToolUse")
+        assert code == 2, err
+        assert "leaks on main" in err
+        assert "`main`" in err
+
+
 if __name__ == "__main__":
     failures = 0
     for name, fn in sorted(globals().items()):
