@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Runnable check for trailer_guard.py. Run: python3 test_dco_trailer_guard.py"""
+"""Runnable check for trailer_guard.py. Run: python3 test_trailer_guard.py"""
 
 import json
 import os
@@ -211,15 +211,53 @@ def recipe_from(err):
     return lines[0]
 
 
+# A heredoc handed to a shell is a command being run, not a message.
+HEREDOC_SHELL = """bash <<'EOF'
+git push origin feature
+EOF"""
+# A body line may itself open with a guarded verb; the heredoc is still a
+# message being written, not a command being run.
+HEREDOC_VERB_FIRST = """git commit --amend -F - <<'EOF'
+git push is refused while a trailer is wrong.
+EOF"""
+
+
 def test_pre_tool_use_blocks_publishing_with_defects():
     with tempfile.TemporaryDirectory() as tmp:
         repo = make_repo(tmp)
         commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
         for cmd in ("git push origin feature", "git push --force-with-lease",
+                    "git send-email --to=list@example.org HEAD~1",
+                    "git send-email --dry-run outgoing/",
+                    "git send-pack origin HEAD", "git imap-send < outgoing.mbox",
+                    "git -C /repo push origin feature",
+                    "git --work-tree /srv/app --git-dir /srv/bare push origin feature",
+                    "git --namespace foo send-email --to=list@example.org HEAD~1",
+                    "git --attr-source HEAD push", "git --config-env x.y=E push",
+                    "git --exec-path=/opt/libexec push",
+                    "git subtree push --prefix=vendor origin main",
+                    "git svn dcommit", "git svn set-tree HEAD", "git p4 submit",
+                    "bash -c 'git push origin feature'", 'git "push" origin feature',
+                    HEREDOC_SHELL, 'out="$(git push origin feature)"',
+                    'echo "$(gh stack submit)"', "ash -c 'git push origin feature'",
+                    "git commit --amend -m 'docs: git send-email' && git push origin feature",
+                    'if [ -n "$x" ]; then git push origin feature; fi',
+                    "sudo -u ci git push origin feature", "timeout 60 git push origin feature",
+                    "env GIT_TRACE=1 git send-email --to=list@example.org HEAD~1",
+                    "git format-patch --stdout HEAD~1 | git send-email --to=list@example.org",
                     "gh pr create --title x --body y", "gh pr ready 7", "gh pr merge 7 --squash"):
             code, err = run_hook(repo, command=cmd, event="PreToolUse")
             assert code == 2, (cmd, err)
             assert "Claude-Session" in err, cmd
+
+
+# A multi-paragraph commit message reaches the hook as the whole heredoc, body
+# included, and this repository's own messages name the guarded commands.
+HEREDOC_AMEND = """git commit --amend -F - <<'EOF'
+feat(trailer-guard): block git send-email while defects remain
+
+Assisted-by: LLM
+EOF"""
 
 
 def test_pre_tool_use_lets_the_repair_through():
@@ -227,7 +265,25 @@ def test_pre_tool_use_lets_the_repair_through():
         repo = make_repo(tmp)
         commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
         for cmd in ("git status", "git log --oneline", "git rebase -i HEAD~1",
-                    "git commit --amend --signoff", "gh pr view 7"):
+                    "git commit --amend --signoff", "gh pr view 7",
+                    "git commit --amend -m 'docs: block git send-email while defects remain'",
+                    "git log --oneline --grep=send-email", "git log --grep push",
+                    HEREDOC_AMEND, HEREDOC_VERB_FIRST,
+                    "git commit --amend -m 'git push is now guarded'",
+                    'gh pr edit 7 --body "git send-email is guarded"',
+                    "git --exec-path /opt/libexec push", "git lfs push origin feature",
+                    "git subtree add --prefix=vendor https://example.org/x.git main",
+                    "git svn rebase"):
+            code, err = run_hook(repo, command=cmd, event="PreToolUse")
+            assert code == 0, (cmd, err)
+
+
+def test_pre_tool_use_lets_patch_formatting_through():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: leaks\n\n" + SIGNOFF + "\nClaude-Session: https://x/y\n")
+        for cmd in ("git format-patch origin/main", "git format-patch --stdout HEAD~3..HEAD",
+                    "git request-pull origin/main ."):
             code, err = run_hook(repo, command=cmd, event="PreToolUse")
             assert code == 0, (cmd, err)
 
@@ -461,6 +517,7 @@ def test_post_tool_use_fires_after_gh_stack_commands():
         assert code == 2, err
         code, err = run_hook(repo, command="gh pr view 7")
         assert code == 0, err
+
 
 def test_a_remote_tracking_ref_is_not_a_parent():
     with tempfile.TemporaryDirectory() as tmp:
