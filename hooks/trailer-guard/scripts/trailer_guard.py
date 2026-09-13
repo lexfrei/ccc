@@ -14,8 +14,10 @@ Two hook events, one script, told apart by `hook_event_name`:
 - PostToolUse after any git or `gh stack` command: report defects on the
   branch (exit 2, so the report reaches the model) but change nothing. Early
   warning.
-- PreToolUse before a command that publishes commits (`git push`, `gh pr
-  create|ready|merge`, `gh stack submit|sync|push|merge|link`): deny the command
+- PreToolUse before a command that publishes commits (`git push`,
+  `git send-email`, `git send-pack`, `git imap-send`, `git subtree push`,
+  `git svn dcommit|set-tree`, `git p4 submit`, `gh pr create|ready|merge`,
+  `gh stack submit|sync|push|merge|link`): deny it
   while defects remain (exit 2). The repair commands themselves (amend,
   rebase, status, log, `gh stack rebase`) are never blocked, otherwise the
   guard would stand between the author and the fix.
@@ -59,14 +61,89 @@ OVERRIDE_KEY = "trailerGuardBase"
 SESSION_RE = re.compile(r"claude-session", re.IGNORECASE)
 ASSISTED_RE = re.compile(r"^assisted-by:\s*(?P<value>.*?)\s*$", re.IGNORECASE | re.MULTILINE)
 LOCAL_RE = re.compile(r"\bgit\b|\bgh\s+stack\b")
+# Publishing is decided on what the line runs, not on what it mentions. The
+# text zones come out first: a heredoc body, and any quoted argument holding
+# more than one word. A quoted single word is an argument, not prose, so it
+# stays (`git "push"` is a push).
+HEREDOC_RE = re.compile(r"<<-?\s*(['\"]?)(\w+)\1\n(.*?)(?:\n\s*\2\b|\Z)", re.DOTALL)
+# A heredoc body is pulled out under a placeholder rather than dropped: it
+# spans newlines, which the line is cut on, and `bash <<EOF` runs what it
+# holds exactly as `bash -c` does.
+BODY_MARK = "\x00%d\x00"
+BODY_MARK_RE = re.compile(r"\x00(\d+)\x00")
+SEGMENT_RE = re.compile(r"[|;&\n]+")
+QUOTE_RE = re.compile(r"'([^']*)'|\"([^\"]*)\"")
+# A quoted argument is read as a command again only where the line runs one.
+SHELL_RE = re.compile(r"\b(?:ba|z|da|k|mk|pdk|t?c|a)?sh\b|\bfish\b|\beval\b|\bssh\b")
+# Command substitution runs whatever holds it, so a double-quoted body that
+# contains one is code. Single quotes suppress it, and `'$(git push)'` really
+# is a literal.
+SUBST_RE = re.compile(r"\$\(|`")
+# Only git's own global options may sit between `git` and its subcommand, so a
+# value handed to an option (`git log --grep push`) is not read as one.
+# The long options that take their value as the next argument have to be
+# named: without them the value ends the run of options and the verb is no
+# longer adjacent to `git`. --exec-path is not one of them, it prints a path
+# and exits unless given with =.
+GIT_VALUE_OPT = r"--(?:git-dir|work-tree|namespace|attr-source|config-env)"
+GIT_GLOBAL = (r"(?:\s+(?:-[cC]\s+\S+|" + GIT_VALUE_OPT + r"\s+\S+"
+              r"|--[\w-]+(?:=\S*)?|-\w))*")
 # Native-stack commands that publish every branch of the stack; sync does so
 # with --force-with-lease and is the main push path of a stack, and link pushes
 # each branch it is handed before looking up its PR. `gh stack rebase` is local
 # and is the stack's repair step.
 STACK_PUBLISH_RE = re.compile(r"\bgh\s+stack\s+(submit|sync|push|merge|link)\b")
+# The ways a commit message leaves this machine: send-pack is the plumbing
+# under push, imap-send uploads the mailbox to an IMAP server, subtree push
+# splits and pushes the result with the original messages, and the svn and p4
+# bridges commit them to the other system. `git format-patch` and `git request-pull`
+# are deliberately absent, they write to a file or to stdout and send nothing
+# anywhere; `git lfs push` is absent too, it uploads blobs rather than commits,
+# so no trailer of yours travels with it.
+# STACK_PUBLISH_RE is reused as an alternative here, so both stay in step.
 PUBLISH_RE = re.compile(
-    r"\bgit\b[^|;&\n]*\bpush\b|\bgh\s+pr\s+(create|ready|merge)\b|" + STACK_PUBLISH_RE.pattern
+    r"\bgit\b" + GIT_GLOBAL + r"\s+(push|send-email|send-pack|imap-send"
+    r"|subtree\s+push|svn\s+(?:dcommit|set-tree)|p4\s+submit)\b|"
+    r"\bgh\s+pr\s+(create|ready|merge)\b|" + STACK_PUBLISH_RE.pattern
 )
+
+
+def strip_text(segment):
+    """The segment without its quoted prose, and that prose separately."""
+    texts = []
+
+    def quoted(match):
+        single = match.group(1) is not None
+        body = match.group(1) if single else match.group(2)
+        if body and not re.search(r"\s", body):
+            return body
+        if not single and SUBST_RE.search(body):
+            return body
+        texts.append(body)
+        return " "
+
+    return QUOTE_RE.sub(quoted, segment), texts
+
+
+def invokes(command, pattern):
+    """Whether the line actually runs a command the pattern describes."""
+    bodies = []
+
+    def park(match):
+        bodies.append(match.group(3))
+        return " " + BODY_MARK % (len(bodies) - 1) + " "
+
+    for segment in SEGMENT_RE.split(HEREDOC_RE.sub(park, command)):
+        code, texts = strip_text(segment)
+        texts = [BODY_MARK_RE.sub(lambda mark: bodies[int(mark.group(1))], text)
+                 for text in texts]
+        texts += [bodies[int(index)] for index in BODY_MARK_RE.findall(code)]
+        code = BODY_MARK_RE.sub(" ", code)
+        if pattern.search(code):
+            return True
+        if SHELL_RE.search(code) and any(pattern.search(text) for text in texts):
+            return True
+    return False
 
 
 def git(args, cwd):
@@ -391,10 +468,10 @@ def main():
 
     whole_stack = publishing = False
     if event == "PreToolUse":
-        if not PUBLISH_RE.search(command):
+        if not invokes(command, PUBLISH_RE):
             return 0
         publishing = True
-        whole_stack = bool(STACK_PUBLISH_RE.search(command))
+        whole_stack = invokes(command, STACK_PUBLISH_RE)
     elif not LOCAL_RE.search(command):
         return 0
 
