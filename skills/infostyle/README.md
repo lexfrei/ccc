@@ -19,16 +19,16 @@ Articles, landing copy, product descriptions, internal docs, announcements, repo
 
 Runs a fixed order of passes instead of a single vague "make it better":
 
-1. **Task** — audience and useful action ("why would the reader read this at all"). Everything that does not serve it becomes a deletion candidate.
+1. **Task and context** — audience, useful action ("why would the reader read this at all"), and where the text lands: a text whose context is broken is not fixed by editing words. Everything that does not serve the useful action becomes a deletion candidate.
 2. **Structure** — substance first, one structure per text, contract with the reader, no second-level nesting.
 3. **Paragraph** — one topic, self-contained opening sentence, first-sentences-only readability check.
 4. **Sentence** — people and actions instead of processes, main parts close together, no overload.
 5. **Word** — the five stop-word groups: вводные, неопределённое, заумь, навязанные оценки, штампы.
 6. **Presentation** — headings, subheadings, lists, a cheat-sheet box for long documents.
 
-Two modes: rewrite (default, ends with a change report) and `--разбор` — findings only, no rewriting.
+Three modes: rewrite (default, ends with a change report), `--разбор` — findings only, no rewriting, and `--раскладка` — re-layout without changing a single word, for documents whose wording is fixed by lawyers or a regulation: paragraphs cut to 5–7 lines, key points duplicated as a list at the top, blocks reordered from substance to background, run-in subheadings added.
 
-Reference files next to the skill carry the detail: `references/stop-words.md` (the five groups with replacement tables), `references/syntax.md` (sentence, paragraph, lists, the six bureaucratese fixes), `references/structure.md` (useful action, text structures, examples and counter-examples, tone, presentation).
+Reference files next to the skill carry the detail: `references/stop-words.md` (the five groups with replacement tables), `references/syntax.md` (sentence, paragraph, lists, the six bureaucratese fixes), `references/structure.md` (context, useful action, text structures, examples and counter-examples, tone, presentation), `references/genres.md` (writing about yourself, about a company, work reports, press releases, slide decks, promo pages).
 
 The rule that matters most: **the skill never invents facts.** Replacing "качественный сервис" with a number requires a number. When there is none, the text gets an explicit `[нужен факт: …]` marker and the report says so.
 
@@ -36,11 +36,11 @@ The rule that matters most: **the skill never invents facts.** Replacing "кач
 
 Letters to colleagues, clients, contractors and officials; replies to complaints; cold emails; job applications; work messages in chat.
 
-Starts with the question the book puts first: should this be a letter at all? Emotions, a complaint about a colleague, a ten-person planning thread and an actual fire all belong on the phone, not in the inbox. Then it checks the subject line, the structure (substance right after the greeting, one letter — one matter, a question that is comfortable to answer), the work done on the reader's behalf, and boundaries: no "как у тебя со временем", no "ты же профессионал", no ironic quotation marks, no "заранее спасибо".
+Starts with the question the book puts first: should this be a letter at all? Emotions, a complaint about a colleague, a five-person planning thread, an actual fire and a complex high-stakes proposal all belong on the phone or in a meeting, not in the inbox. Then it checks the subject line, the structure (substance right after the greeting, one letter — one matter, a question that is comfortable to answer), how new participants are brought into a thread, the work done on the reader's behalf, and boundaries: no "как у тебя со временем", no "ты же профессионал", no ironic quotation marks, no "заранее спасибо".
 
-Separate sections cover cold emails (assume nothing about the reader, ask for a small next step) and replies to public calls for applications (answer point by point, in the requester's own format).
+Separate sections cover the genres: cold emails, replies to job ads, complaint responses (both when the customer is right and when they are not), letters that are pure venting, reminders to a colleague, hiring conversations and fee negotiation, commercial proposals, and asking someone to do work outside their obligations.
 
-Same two modes: rewrite or `--разбор`.
+Same modes: rewrite or `--разбор`.
 
 ## Extending
 

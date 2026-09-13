@@ -1,7 +1,7 @@
 {
   "name": "infostyle",
-  "version": "1.0.0",
-  "description": "Russian text editing in информационный стиль (Ilyahov, Sarycheva). Ships **infostyle** — a full edit pass over prose that starts from the reader's useful action and audience, then works structure, paragraph, sentence, word and presentation, with a stop-word catalogue (вводные, неопределённое, заумь, оценки, штампы), bureaucratese repairs, and a hard ban on inventing the facts that replace value judgements — and **infostyle-letter** — business correspondence on respect and care instead of ritual politeness: informative subject lines, substance in the first paragraph, boundaries, the do-not-send-on-emotion check, cold emails and job replies. Both skills run in rewrite mode or review-only mode",
+  "version": "1.1.0",
+  "description": "Russian text editing in информационный стиль (Ilyahov, Sarycheva). Ships **infostyle** — a full edit pass over prose that starts from context, audience and the reader's useful action, then works structure, paragraph, sentence, word and presentation, with a stop-word catalogue (вводные, неопределённое, заумь, оценки, штампы), bureaucratese repairs, genre checklists (текст о себе, о компании, отчёты, пресс-релиз, слайды, промостраница) and a hard ban on inventing the facts that replace value judgements — and **infostyle-letter** — business correspondence on respect and care instead of ritual politeness: informative subject lines, substance in the first paragraph, boundaries, the do-not-send-on-emotion check, cold emails, complaints, pars, reminders and job replies. Three modes: rewrite, review-only, or re-layout without touching a single word",
   "author": {
     "name": "Aleksei Sviridkin",
     "email": "f@lex.la"
