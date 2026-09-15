@@ -11,9 +11,12 @@ failure surfaces in CI or in review hours later.
 
 Two hook events, one script, told apart by `hook_event_name`:
 
-- PostToolUse after any git or `gh stack` command: report defects on the
-  branch (exit 2, so the report reaches the model) but change nothing. Early
-  warning.
+- PostToolUse after a command that writes commits, moves HEAD onto different
+  ones, or publishes them: report defects on the branch (exit 2, so the report
+  reaches the model) but change nothing. Early warning. A read is not one:
+  `git log` cannot change what the guard would say, so firing after it only
+  repeats a report the author is already looking at, once per command until
+  the commit is repaired.
 - PreToolUse before a command that publishes commits (`git push`,
   `git send-email`, `git send-pack`, `git imap-send`, `git subtree push`,
   `git svn dcommit|set-tree`, `git p4 submit`, `gh pr create|ready|merge`,
@@ -51,7 +54,7 @@ import sys
 TRAILER = "Signed-off-by"
 ASSISTED_VALUE = "LLM"
 # Enough history to tell a sign-off repository from a repository that never
-# signs off, cheap enough to run after every git command.
+# signs off, cheap enough to run after every command that writes history.
 BASE_SCAN = 20
 # Per-branch override of the base: `git config branch.<name>.trailerGuardBase
 # <revision>`. Repo-wide would fit one layer of a stack only, and set to the
@@ -60,7 +63,6 @@ OVERRIDE_KEY = "trailerGuardBase"
 
 SESSION_RE = re.compile(r"claude-session", re.IGNORECASE)
 ASSISTED_RE = re.compile(r"^assisted-by:\s*(?P<value>.*?)\s*$", re.IGNORECASE | re.MULTILINE)
-LOCAL_RE = re.compile(r"\bgit\b|\bgh\s+stack\b")
 # Publishing is decided on what the line runs, not on what it mentions. The
 # text zones come out first: a heredoc body, and any quoted argument holding
 # more than one word. A quoted single word is an argument, not prose, so it
@@ -105,6 +107,21 @@ PUBLISH_RE = re.compile(
     r"\bgit\b" + GIT_GLOBAL + r"\s+(push|send-email|send-pack|imap-send"
     r"|subtree\s+push|svn\s+(?:dcommit|set-tree)|p4\s+submit)\b|"
     r"\bgh\s+pr\s+(create|ready|merge)\b|" + STACK_PUBLISH_RE.pattern
+)
+
+# What the PostToolUse arm fires after: a command that can change the answer.
+# These create commits, rewrite them, or move HEAD onto different ones, so the
+# report that follows is news. A read (`git log`, `git status`, `git diff`)
+# changes nothing, and firing after one repeats a standing report the author
+# has already seen, once per command, until the commit is repaired. Publishing
+# changes the answer too (a pushed layer stops being this branch's to repair),
+# so PUBLISH_RE is reused as an alternative here and the two stay in step;
+# `gh stack rebase` is the stack's repair step and its result has to be seen.
+# The verb has to sit where a git subcommand sits, as it does for publishing.
+LOCAL_RE = re.compile(
+    r"\bgit\b" + GIT_GLOBAL + r"\s+(commit|merge|rebase|cherry-pick|revert|am"
+    r"|reset|checkout|switch|pull|filter-branch)\b|"
+    r"\bgh\s+stack\s+rebase\b|" + PUBLISH_RE.pattern
 )
 
 
@@ -472,7 +489,7 @@ def main():
             return 0
         publishing = True
         whole_stack = invokes(command, STACK_PUBLISH_RE)
-    elif not LOCAL_RE.search(command):
+    elif not invokes(command, LOCAL_RE):
         return 0
 
     cwd = payload.get("cwd") or "."
