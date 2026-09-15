@@ -55,7 +55,7 @@ def make_repo(tmp, base_signed=True):
     return repo
 
 
-def run_hook(repo, command="git status", event="PostToolUse"):
+def run_hook(repo, command="git commit", event="PostToolUse"):
     payload = {"hook_event_name": event, "tool_name": "Bash",
                "tool_input": {"command": command}, "cwd": repo}
     done = subprocess.run(
@@ -84,6 +84,54 @@ def test_non_git_command_is_silent():
         commit(repo, "feat: bad\n\nClaude-Session: https://example.com/s/1\n")
         code, err = run_hook(repo, command="ls -la")
         assert code == 0, err
+
+
+def test_read_only_git_command_is_silent():
+    """A read cannot change the answer, so it must not repeat it."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: bad\n\nClaude-Session: https://example.com/s/1\n")
+        for cmd in ("git log --oneline -5", "git status", "git diff HEAD~1",
+                    "git show HEAD", "git branch -a", "git archive HEAD",
+                    "git -C /elsewhere log", "gh stack view"):
+            code, err = run_hook(repo, command=cmd)
+            assert code == 0, f"{cmd} fired: {err}"
+
+
+def test_history_writing_git_command_is_reported():
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: bad\n\nClaude-Session: https://example.com/s/1\n")
+        for cmd in ("git commit --amend --no-edit", "git rebase main",
+                    "git cherry-pick abc1234", "git revert HEAD",
+                    "git merge main", "git reset --hard HEAD~1",
+                    "git checkout main", "git switch main", "git pull",
+                    "git -C . commit", "gh stack rebase"):
+            code, err = run_hook(repo, command=cmd)
+            assert code == 2, f"{cmd} stayed silent"
+
+
+def test_a_command_that_only_mentions_git_is_silent():
+    """The gate judges what the line runs, not what its text contains."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: bad\n\nClaude-Session: https://example.com/s/1\n")
+        for cmd in ("grep -r git .", 'echo "remember to git commit later"',
+                    "cd /home/x/git/proj && make",
+                    "git log --grep commit"):
+            code, err = run_hook(repo, command=cmd)
+            assert code == 0, f"{cmd} fired: {err}"
+
+
+def test_a_shell_that_runs_a_commit_is_reported():
+    """Set-aside text is code again where its segment runs a shell."""
+    with tempfile.TemporaryDirectory() as tmp:
+        repo = make_repo(tmp)
+        commit(repo, "feat: bad\n\nClaude-Session: https://example.com/s/1\n")
+        for cmd in ("bash -c 'git commit --amend'", 'eval "git rebase main"',
+                    "make build && git commit --amend"):
+            code, err = run_hook(repo, command=cmd)
+            assert code == 2, f"{cmd} stayed silent"
 
 
 def test_missing_signoff_is_reported():
