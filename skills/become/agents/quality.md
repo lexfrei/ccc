@@ -156,7 +156,7 @@ grep "$(yq '.technical_stack.libraries.validation' .architecture.yaml)" go.mod |
 
 ### Go Projects
 ```bash
-golangci-lint run --timeout 5m
+golangci-lint run --timeout 5m --allow-serial-runners
 go test -race ./...
 go build ./cmd/...
 go mod tidy && go mod vendor
@@ -165,6 +165,8 @@ go mod tidy && go mod vendor
 grep "echo/v4" go.mod || echo "FAIL: Wrong framework"
 grep "cockroachdb/errors" go.mod || echo "FAIL: Wrong error lib"
 ```
+
+Keep golangci-lint on its default cache and its machine-wide lock. A cold run of a large module can take gigabytes of memory where a warm one takes a few hundred megabytes, so pointing `GOLANGCI_LINT_CACHE` at a fresh directory such as `$(mktemp -d)` makes every run the expensive one. `--allow-serial-runners` queues a run behind any other golangci-lint on the machine instead of failing after five seconds; `--allow-parallel-runners` drops the lock, and several cold runs at once can exhaust memory and wake the OOM killer.
 
 ### Containerfiles
 ```bash

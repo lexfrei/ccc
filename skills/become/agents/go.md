@@ -88,7 +88,7 @@ REFACTOR:
   3. Test after each change
 
 LINT:
-  1. golangci-lint run
+  1. golangci-lint run --allow-serial-runners (default cache; never a fresh GOLANGCI_LINT_CACHE, never --allow-parallel-runners)
   2. Fix all errors
   3. go mod tidy
 
