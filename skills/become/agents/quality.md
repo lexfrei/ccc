@@ -168,6 +168,8 @@ grep "cockroachdb/errors" go.mod || echo "FAIL: Wrong error lib"
 
 Keep golangci-lint on its default cache and its machine-wide lock. A cold run of a large module can take gigabytes of memory where a warm one takes a few hundred megabytes, so pointing `GOLANGCI_LINT_CACHE` at a fresh directory such as `$(mktemp -d)` makes every run the expensive one. `--allow-serial-runners` queues a run behind any other golangci-lint on the machine instead of failing after five seconds; `--allow-parallel-runners` drops the lock, and several cold runs at once can exhaust memory and wake the OOM killer.
 
+A shared cache can hold results for a worktree that has since been deleted; the generated-file filter then cannot open those paths and lets generated-file findings through. When findings show up in generated code next to a path that no longer exists, run `golangci-lint cache clean` once and lint again.
+
 ### Containerfiles
 ```bash
 hadolint build/*/Containerfile
