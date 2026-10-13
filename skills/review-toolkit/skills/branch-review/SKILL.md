@@ -4,6 +4,8 @@ description: Review current branch changes in isolation. Output starts with LGTM
 argument-hint: "[path] [--target branch] [--nitpick] [--type go|node|python|rust|kernel] [--exclude pattern,pattern] [--ticket URL|ID] [--round1-head sha]"
 context: fork
 agent: general-purpose
+model: sonnet
+effort: high
 ---
 
 **Important**: If the current directory is not a git repository, ask the user where the target repository is located before proceeding.

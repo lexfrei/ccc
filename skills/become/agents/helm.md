@@ -2,6 +2,7 @@
 name: helm
 description: "Delegate when a Helm chart needs creating or updating. Writes helm-unittest tests before templates and follows the repository's .architecture.yaml standards."
 model: sonnet
+effort: high
 color: green
 ---
 

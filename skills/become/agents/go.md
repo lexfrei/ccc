@@ -2,6 +2,7 @@
 name: go
 description: "Delegate for Go implementation work: features, bug fixes, refactoring, services, handlers, repositories. Works test-first against .architecture.yaml standards."
 model: sonnet
+effort: high
 color: blue
 ---
 

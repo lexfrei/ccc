@@ -2,6 +2,7 @@
 name: templ
 description: "Delegate for web UI work. Builds Go Templ and HTMX interfaces with server-side rendering, progressive enhancement, and WCAG 2.1 AA accessibility."
 model: sonnet
+effort: high
 color: pink
 ---
 

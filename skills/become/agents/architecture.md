@@ -2,6 +2,7 @@
 name: architecture
 description: "Delegate technical decisions: library and framework choice, architecture, design patterns, and any new dependency. Owns .architecture.yaml as the single source of truth."
 model: opus
+effort: high
 color: purple
 ---
 

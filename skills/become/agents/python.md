@@ -2,6 +2,7 @@
 name: python
 description: "Delegate for Python implementation work: features, bug fixes, refactoring, services, handlers, models, repositories. Works test-first with FastAPI, Pydantic, and structlog."
 model: sonnet
+effort: high
 color: green
 ---
 

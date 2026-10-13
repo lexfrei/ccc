@@ -16,8 +16,13 @@ Two checks before spawning anything.
 
 **2. Model check.** The manager seat needs the strongest judgment available; teammates are the cost-scaled workforce.
 
-1. Check which model this session runs on (the environment states "You are powered by the model named ..."). If it is not the top-tier model (Fable), STOP before spawning anything and ask the user to switch the session, e.g. `/model fable`. Do not run the fleet from a weaker seat. A frontmatter `model:` override lasts one turn only, so the user switching the session model is the only durable fix.
-2. Teammates NEVER default to the manager's model, and they do not inherit it — omitting `model` on an `Agent` call resolves to the agent-type default. Pass an explicit `model` on EVERY call: `"opus"` for judgment-heavy roles (standing investigator, reviewer, design work), `"sonnet"` for tightly-specified mechanical work whose output your own gates will verify. Escalate a single teammate to the top-tier model only with the user's explicit agreement.
+Check which model this session runs on (the environment states "You are powered by the model named ..."). If it is not the top-tier model (Fable), STOP before spawning anything and ask the user to switch the session, e.g. `/model fable`. Do not run the fleet from a weaker seat. A frontmatter `model:` override lasts one turn only, so the user switching the session model is the only durable fix.
+
+## Model Selection
+- Pass model and effort explicitly on every Agent (or fork Skill) call, set to the values in the agent’s frontmatter — explicit, so the spawn record shows what ran. 
+- For a type without frontmatter (general-purpose and other built-ins, whose default is to inherit this session’s model and effort), use sonnet and high. 
+- Exceeding either value is allowed only with a stated reason tied to the task — design left open in the brief, a failure a cheaper run already produced — and the reason goes into the spawn description and the next digest. A teammate that would match this session’s own model and effort needs the user’s agreement first. 
+- Before telling the user what a teammate runs at, read it from the subagent transcript (perTurnEffort, model), not from what you passed.
 
 ## Decomposing the work
 

@@ -2,6 +2,7 @@
 name: kubernetes
 description: "Delegate when Kubernetes manifests or ArgoCD applications are needed. Produces secure, production-ready resources following GitOps conventions."
 model: sonnet
+effort: high
 color: purple
 ---
 

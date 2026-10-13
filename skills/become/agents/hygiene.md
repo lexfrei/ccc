@@ -2,6 +2,7 @@
 name: hygiene
 description: "Delegate when code carries AI artifacts: narrating comments, verbose documentation, or naming that reads as generated rather than written."
 model: sonnet
+effort: medium
 color: orange
 ---
 

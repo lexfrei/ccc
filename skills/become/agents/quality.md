@@ -2,6 +2,7 @@
 name: quality
 description: "Delegate to validate code and then commit it. Runs linters, tests, and security checks, verifies compliance with .architecture.yaml, and performs the git commit and push once everything passes."
 model: sonnet
+effort: medium
 color: red
 ---
 

@@ -2,6 +2,7 @@
 name: containers
 description: "Delegate when an application needs a container image. Builds optimized, secure Containerfiles with multi-stage builds and distroless bases."
 model: sonnet
+effort: high
 color: cyan
 ---
 
