@@ -68,11 +68,11 @@ If `mergeStateStatus` comes back `UNKNOWN`, GitHub has not finished computing it
 
 ### 1.5a. Merge conflicts (DIRTY)
 
-If `mergeable == "CONFLICTING"` or `mergeStateStatus == "DIRTY"`, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely.
+If `mergeable == "CONFLICTING"` or `mergeStateStatus == "DIRTY"`, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely. A reviewer with write access to the branch does not ask for a conflict with one obvious mechanical answer: the draft proposes syncing the branch per [`references/maintainer-actions.md`](references/maintainer-actions.md) instead, and the review runs on the synced head.
 
 ### 1.5b. Red CI plausibly tied to the code
 
-Consider only checks that actually FAILED — `conclusion` in `FAILURE`, `TIMED_OUT`, `ERROR`, `STARTUP_FAILURE`, or a StatusContext `state` of `FAILURE` / `ERROR`. Checks that are still running (`QUEUED`, `IN_PROGRESS`, `PENDING`) or awaiting manual authorization (`ACTION_REQUIRED` — common for fork PRs and protected-environment / deployment gates) are NOT red: the diff has not failed, so do not gate on them, though you may note that CI has not finished. `NEUTRAL`, `SKIPPED`, `CANCELLED` are not failures. Only genuine failures reach the code-related-vs-not test below — do not let the "if you cannot tell" rule pull a pending or manual-approval check into gating.
+Consider only checks that actually FAILED — `conclusion` in `FAILURE`, `TIMED_OUT`, `ERROR`, `STARTUP_FAILURE`, or a StatusContext `state` of `FAILURE` / `ERROR`. Checks that are still running (`QUEUED`, `IN_PROGRESS`, `PENDING`) or awaiting manual authorization (`ACTION_REQUIRED` — common for fork PRs and protected-environment / deployment gates) are NOT red: the diff has not failed, so do not gate on them, though you may note that CI has not finished. A reviewer with write access proposes approving `ACTION_REQUIRED` fork runs per [`references/maintainer-actions.md`](references/maintainer-actions.md), which sets the conditions. `NEUTRAL`, `SKIPPED`, `CANCELLED` are not failures. Only genuine failures reach the code-related-vs-not test below — do not let the "if you cannot tell" rule pull a pending or manual-approval check into gating.
 
 Split the failing checks into two buckets:
 
@@ -125,6 +125,8 @@ Four checks. Each hit is a verdict finding (Step 6, Provenance blockers) that qu
 - **Session links.** A `Claude-Session:` trailer, or a URL to an assistant session or shared transcript (`claude.ai/code/...`, `chatgpt.com/share/...` and the like) in a commit message, the PR body, or the author's comments. A transcript is not a rationale and the link rots; the fix is to drop it and put the WHY into the message.
 - **Commit messages.** The subject is imperative and specific, in `type(scope): description` form where the repository uses Conventional Commits (`fix`, `wip`, `update` are not subjects). The body explains WHY and only WHY: a body that walks through the diff, or carries review-iteration or planning vocabulary ("address review comments", "pass 2", "batch 1", "as discussed", a bare ticket ID as the whole explanation), blocks. So does a missing `Signed-off-by` in a repository whose history carries them.
 - **Undisclosed machine authorship.** Obviously machine-written code on commits without an `Assisted-by: LLM` trailer. "Obviously" is an evidence bar, not an impression: the diff shows at least two of — comments narrating the next line, section banners, tutorial-flow comments ("First, ... Next, ... Finally"), docstrings restating the signature, `IMPORTANT:` / `NOTE:` on the unremarkable, comment density far above the surrounding file, em-dash clusters or the "not X, but Y" frame in prose. Quote each tell. One tell alone is a non-blocking note. The fix has two halves: the disclosure trailer, and the tells themselves, which the cascaded `/branch-review` flags as WHAT-comments in their own right.
+
+An empty commit without `Signed-off-by` that GitHub inserted while merging a stack parent is not the author's text: it is mechanical cleanup per [`references/maintainer-actions.md`](references/maintainer-actions.md), not a provenance finding.
 
 ## Step 2: Business Context
 
@@ -385,6 +387,7 @@ Present:
 3. Each inline comment with file path and line number
 4. List of DISPROVEN findings (so the user can verify dismissals)
 5. Drafts of any tracking issues (title + body) that publish-mode would file in Step 9 — title, target repo, and full body
+6. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals
 
 **Gate mode (Step 1.5):** present only the readiness note and the concrete ask — there are no findings, inline comments, DISPROVEN list, or tracking issues, because no code review was performed. The approval gate below still applies before any `--publish`.
 
@@ -395,6 +398,8 @@ If `--publish` **was** passed: this output is now an approval gate. Wait for exp
 ## Step 9: Publish (only when `--publish` was passed AND user approved in Step 8)
 
 **Gate mode (Step 1.5):** skip 9a (no tracking issues). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). The proven-defect case from 1.5b posts `REQUEST_CHANGES` instead.
+
+Approved maintainer actions (Step 8 item 6) run first, per [`references/maintainer-actions.md`](references/maintainer-actions.md).
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
