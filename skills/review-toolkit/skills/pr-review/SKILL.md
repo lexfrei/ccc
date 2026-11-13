@@ -138,7 +138,7 @@ Before any code reading, frame WHY this PR exists. Read in this order:
    - GitHub shorthand (`#123`): `gh issue view 123` in the current repo
    - Other ID: ask the user for the full URL
 
-Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary will appear in the published review under `**Business context**:`. It is stated in full only in the **first** review this skill publishes on the PR; on any later publish it is omitted when unchanged, or shown as a delta against the previously recorded context when it changed — never restated in full (see Step 9b.5).
+Formulate a one-sentence summary of the business problem this PR solves. Every later finding must be evaluated against this context. The summary heads the draft in Step 8 so the user can check the framing; it is not a separate line of the published body, which holds only the verdict sentence and the items without a diff line (Step 7). When the context is the reason for the verdict, the verdict sentence says so.
 
 If `--ticket` was provided, also extract:
 
@@ -262,7 +262,7 @@ After verification, label findings by source:
 
 ### 5d. Evidence format
 
-Each finding in the published review must carry an `**Evidence**:` line. Example:
+Each finding in the draft must carry an `**Evidence**:` line; the published item compresses it per Step 7. Example:
 
 > cert-manager `values.yaml:3` sets `enableGatewayAPI: true` unconditionally. **Evidence**: cert-manager source (link) shows the gateway-shim controller discovers CRDs only at startup; `cozystack.cert-manager` PackageSource has no `dependsOn` for `cozystack.gateway-api-crds`; therefore on fresh install cert-manager starts before CRDs exist → gateway support silently non-functional.
 
@@ -337,29 +337,23 @@ Use **LGTM** when there are no blockers, **NOT LGTM** when there is at least one
 
 `COMMENT` carries a verdict word in the merge-state case above and in a user-requested comment-only review. It carries none in gate mode (Step 1.5) and whenever the review cannot reach a final verdict, for example when a blocker-sized question stays UNVERIFIABLE — then the body says what is missing. A `COMMENT` never clears an earlier `APPROVE` or `CHANGES_REQUESTED` (see 9b).
 
-Output structure:
+Every finding — blocker or follow-up — is written as one item in the same shape, readable in 30 seconds:
+
+- **What** is wrong: one sentence that carries the mechanism.
+- **Where**: `file:line`, `commit <sha>`, a PR body section, or a check name.
+- **Fix**: the concrete action.
+
+No narration of what the reviewer checked ("I traced X, then ran Y"), no inventory of tests inside an item. The Step 5 `**Evidence**` line belongs to the draft the user sees in Step 8; the published item keeps only the proof the author needs to believe the mechanism. Mark items that do not block with `(non-blocking)`.
+
+A finding on a line that exists in the PR diff goes only into an inline comment on that line. The body never repeats it. The body holds the verdict sentence plus the items that have no diff line: commit messages, the PR body, CI, branch history, code outside the diff, cross-repo docs gaps (with the tracking-issue URL filed in Step 9). When every finding went inline, the body is the verdict line alone. An `APPROVE` body is one line, plus optional asks in the same item shape.
+
+Body structure:
 
 ```text
 <LGTM | NOT LGTM> — <one-sentence why>
 
-**Business context**: <one sentence from Step 2 — first publish only. On a later publish, omit this line if the context is unchanged, or replace it with `**Business context update**: <delta> (previously: <prior sentence>)` if it changed. See Step 9b.5>
-
-<If blockers exist:>
-## Blockers
-
-### B1: <concise title>
-**File**: path/to/file.ext:LINE
-**Issue**: <description>
-**Evidence**: <what was checked, what proves the issue> [Codex] [Claude + Codex]
-**Impact**: <what happens if this ships>
-**Fix**: <specific actionable suggestion>
-
-### B2: ...
-
-<If non-blocking follow-ups exist:>
-## Non-blocking follow-ups
-
-1. <description with file:line; if cross-repo docs gap, include the tracking-issue URL filed in Step 9>
+<If items without a diff line exist:>
+1. <what, with the mechanism> — <where>. Fix: <action>.
 2. ...
 
 <If --ticket provided:>
@@ -379,9 +373,8 @@ Style rules:
 - **No AI attribution**: no "Claude says", "Codex flagged", "automated review found". The `[Claude + Codex]` / `[Codex]` tags after the Evidence line stay internal — strip them before publishing if the PR's audience is external.
 - **No private infrastructure**: never mention cluster names, client names, internal IPs, or environment identifiers in public reviews.
 - **No internal tool names**: do not name custom skills, slash commands, or tooling (`/pr-review`, `/branch-review`, plugin names) in the published body. Reviewers can be referenced as "Opus" / "Codex" generically if needed; never by tool path.
-- **Inline comments**: only for findings on lines that exist in the PR diff. Findings outside the diff go in the review body.
-- **Commit-level findings**: for a commit message or PR body finding, `**File**` becomes `commit <sha>` or `PR body`; these never go inline.
-- **One review, not a wall of text**: keep blockers focused and concise. The author should be able to act on each one independently.
+- **Inline or body, never both**: a finding on a line in the PR diff is an inline comment and nothing else; commit message, PR body, CI, and outside-the-diff findings go in the body and never inline.
+- **One review, not a wall of text**: the author should be able to act on each item independently, without reading an essay first.
 
 ## Step 8: Present the Draft
 
@@ -401,7 +394,7 @@ If `--publish` **was** passed: this output is now an approval gate. Wait for exp
 
 ## Step 9: Publish (only when `--publish` was passed AND user approved in Step 8)
 
-**Gate mode (Step 1.5):** skip 9a (no tracking issues) AND 9b.5 (gate mode never ran Step 2, so there is no business context to reconcile — the readiness note carries none). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). The proven-defect case from 1.5b posts `REQUEST_CHANGES` instead.
+**Gate mode (Step 1.5):** skip 9a (no tracking issues). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). The proven-defect case from 1.5b posts `REQUEST_CHANGES` instead.
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
@@ -424,7 +417,7 @@ Capture each URL and splice it into the review body under the relevant non-block
 
 ### 9b. Read your prior reviews on this PR
 
-Every publish POSTs a NEW review; a submitted one is never edited (see **Never update a published review** below). Prior reviews are still read here for two reasons: 9b.5 needs whatever business context is already recorded, and a lingering approval needs surfacing.
+Every publish POSTs a NEW review; a submitted one is never edited (see **Never update a published review** below). Prior reviews are still read here because a lingering approval or change request needs surfacing.
 
 ```bash
 ME=$(gh api user --jq .login)
@@ -438,24 +431,6 @@ EFFECTIVE_VERDICT=$(jq -r '[.[] | select(.state == "APPROVED" or .state == "CHAN
 ```
 
 Older reviews stay in the timeline as history — the new one becomes the effective verdict. One caveat GitHub imposes: a `COMMENT` review never dismisses a prior `APPROVED` or `CHANGES_REQUESTED` state, and that state can sit several reviews back, which is why `EFFECTIVE_VERDICT` scans the whole list rather than the latest entry. When this run publishes a `COMMENT` (any of the Step 7 cases) over a non-empty `EFFECTIVE_VERDICT`, that earlier state keeps counting: a stale approval still satisfies branch protection, a stale change request still blocks. Surface this to the user so they can decide whether to dismiss it — do not dismiss it silently. (`APPROVE` supersedes a prior change request and `REQUEST_CHANGES` a prior approval, so neither needs a dismissal.)
-
-### 9b.5 Business context continuity
-
-The business context (the WHY from Step 2) is stated in full **once** — in the first review this skill publishes on the PR. On every later publish, reconcile against what was already posted:
-
-1. Find the *previously recorded context* by searching backward through `$MY_REVIEWS` (from 9b) for the most recent body that actually carries a `**Business context**:` or `**Business context update**:` line — NOT just the latest review, because a later gate-mode `COMMENTED` note carries no context and would otherwise read as "no context recorded", duplicating the full sentence on the next publish:
-
-   ```bash
-   PRIOR_CONTEXT_BODY=$(jq -r '[.[] | select(.body | test("\\*\\*Business context"))] | last | .body // empty' <<<"$MY_REVIEWS")
-   ```
-
-   Extract the context line from `$PRIOR_CONTEXT_BODY`; if it is empty, no context was recorded yet.
-2. Decide how this publish renders the context:
-   - **No prior context recorded** → include the full `**Business context**: <sentence>` line.
-   - **Unchanged from the prior** → omit the line entirely; it is already stated upstream in the timeline.
-   - **Changed from the prior** → replace it with `**Business context update**: <what changed> (previously: <prior sentence>)`. Never silently swap in a fresh full sentence — always show the delta against the recorded context.
-
-This keeps the WHY from being repeated verbatim across re-runs while still surfacing a genuine change in framing.
 
 ### 9c. Create the review
 
@@ -472,7 +447,8 @@ review = {
         {
             "path": "path/to/file.ext",
             "line": 42,
-            "body": "<comment text — for findings on lines that exist in the diff>"
+            "side": "RIGHT",
+            "body": "<one item in the Step 7 shape — the line must exist in the PR diff, otherwise the item goes to the body>"
         }
     ]
 }
