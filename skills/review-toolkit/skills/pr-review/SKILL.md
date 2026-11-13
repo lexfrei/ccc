@@ -1,7 +1,7 @@
 ---
 name: pr-review
 description: >
-  Draft a GitHub PR review with inline comments. Opens with a readiness gate (stops on merge conflicts or red code-related CI with a fix-it note, no verdict), then runs the five-frame substance pass (problem real & root cause in-repo / approach optimal & worth its permanent cost / tradeoffs & scope / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, and presents the draft for approval. A provenance pass on the commit messages and the PR body blocks model-advertising trailers (`Assisted-by` takes only `LLM`), session links, messages that narrate the diff instead of the reason, and obviously machine-written code without an `Assisted-by: LLM` disclosure. A value/design gate can block a PR even when the code is flawless — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach. Publishing the review to GitHub is opt-in via `--publish`; without it the draft is the deliverable. Reviews open with an LGTM or NOT LGTM verdict (matching the /branch-review convention); the only no-verdict path is the readiness gate's fix-CI / fix-conflicts note.
+  Draft a GitHub PR review with inline comments. Opens with a readiness gate (stops on merge conflicts or red code-related CI with a fix-it note, no verdict), then runs the five-frame substance pass (problem real & root cause in-repo / approach optimal & worth its permanent cost / tradeoffs & scope / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, and presents the draft for approval. A provenance pass on the commit messages and the PR body blocks model-advertising trailers (`Assisted-by` takes only `LLM`), session links, messages that narrate the diff instead of the reason, and obviously machine-written code without an `Assisted-by: LLM` disclosure. A value/design gate can block a PR even when the code is flawless — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach. Publishing the review to GitHub is opt-in via `--publish`; without it the draft is the deliverable. Reviews open with an LGTM or NOT LGTM verdict (matching the /branch-review convention); the only no-verdict path is the readiness gate's fix-CI / fix-conflicts note. An LGTM is published as APPROVE only when the PR can merge right now; otherwise it goes out as COMMENT naming what the merge waits for.
   TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples — "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for — replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
 argument-hint: "[PR number] [--publish] [--approve] [--target branch] [--ticket URL|ID]"
 ---
@@ -59,6 +59,9 @@ gh pr view $PR_NUMBER --json mergeable,mergeStateStatus --jq '{mergeable, mergeS
 # CI — every check run/context with its conclusion (handles both CheckRun and StatusContext shapes)
 gh pr view $PR_NUMBER --json statusCheckRollup \
   --jq '.statusCheckRollup[] | {name: (.name // .context), status: .status, conclusion: (.conclusion // .state)}'
+
+# Required checks only: Step 7 needs them to choose between APPROVE and COMMENT
+gh pr checks $PR_NUMBER --required --json name,bucket
 ```
 
 If `mergeStateStatus` comes back `UNKNOWN`, GitHub has not finished computing it — wait a few seconds and re-query once before deciding.
@@ -78,6 +81,8 @@ Split the failing checks into two buckets:
 
 The test is: "could this red check plausibly be caused by the diff?" If yes — or if you cannot tell — treat it as code-related and gate. Do not spend a full review proving a defect the CI already caught; hand it back.
 
+When the failing check's log pins the failure on a line the diff changed, the red is a proven defect, not an unclassified one: the gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES`, naming the check and the line. Every other gate case stays a no-verdict `COMMENT`.
+
 ### 1.5c. Gate-mode output
 
 When 1.5a or 1.5b fires, STOP before Step 2 — do NOT run `/branch-review`, Codex, or Claude's analysis. This also skips Ticket Compliance (the `--ticket` pass): no code was reviewed against requirements, so the note makes no compliance claim. Produce a comment-style note with no verdict word, covering:
@@ -90,7 +95,7 @@ Example note (gate form):
 
 > This PR isn't ready for review yet. CI is red on checks that look code-related — `build`, `test (integration)` — and the branch has merge conflicts with `main`. Please rebase to resolve the conflicts, get those checks green, then re-request review. I haven't looked at the code itself yet.
 
-Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE` / `REQUEST_CHANGES`. In default (draft) mode the note is simply reported to the user and the skill stops.
+Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE`, and `REQUEST_CHANGES` only for the proven-defect case in 1.5b. In default (draft) mode the note is simply reported to the user and the skill stops.
 
 If there are no conflicts and no code-related red CI, proceed to Step 1.6.
 
@@ -320,12 +325,17 @@ Real concerns worth surfacing but not blocking this merge:
 
 The review opens with a textual verdict line. The verdict text and the GitHub API event are two distinct layers:
 
-| Textual verdict (first line of body) | GitHub API event |
-| --- | --- |
-| `LGTM` | `APPROVE` |
-| `NOT LGTM` | `REQUEST_CHANGES` |
+| Textual verdict (first line of body) | Merge state | GitHub API event |
+| --- | --- | --- |
+| `LGTM` | mergeable now: every required check green on the exact head, no independent prerequisite open | `APPROVE` |
+| `LGTM` | not mergeable now: a required check pending or red for a reason outside the diff, or an independent prerequisite (companion PR, joint test, maintainer-side setup) still open | `COMMENT`, the body naming what the merge waits for |
+| `NOT LGTM` | any | `REQUEST_CHANGES` |
 
-Use **LGTM** when there are no blockers, **NOT LGTM** when there is at least one — and a Value/Design blocker (Step 6) counts, so a PR with perfect code still gets `NOT LGTM` when Frames 1-3 reject it. `COMMENT` (no verdict word) is used in exactly two cases: (a) **gate mode** from Step 1.5 — the note asks the author to fix conflicts / red CI and carries no verdict, because the code was not reviewed; (b) the user explicitly requested a comment-only review (and even then the body should still open with a clear verdict word). Outside those two cases every review opens with `LGTM` or `NOT LGTM`.
+Use **LGTM** when there are no blockers, **NOT LGTM** when there is at least one — and a Value/Design blocker (Step 6) counts, so a PR with perfect code still gets `NOT LGTM` when Frames 1-3 reject it. Red CI the diff causes is a blocker like any other proven defect.
+
+`APPROVE` means "this can merge now", not "the code looks fine". There is no approve-with-hold: an approval on a PR that cannot merge is read as permission to merge it, and branch protection counts it the moment the blocking condition clears. The one exception is a real stack: a PR whose base is its parent's branch may be approved while it waits only for that parent, when its own part is ready.
+
+`COMMENT` carries a verdict word in the merge-state case above and in a user-requested comment-only review. It carries none in gate mode (Step 1.5) and whenever the review cannot reach a final verdict, for example when a blocker-sized question stays UNVERIFIABLE — then the body says what is missing. A `COMMENT` never clears an earlier `APPROVE` or `CHANGES_REQUESTED` (see 9b).
 
 Output structure:
 
@@ -377,7 +387,7 @@ Style rules:
 
 Present:
 
-1. Textual verdict (LGTM / NOT LGTM) and the corresponding API event (APPROVE / REQUEST_CHANGES) the published version would carry — both, so the user sees the body opener and the GitHub UI label.
+1. Textual verdict (LGTM / NOT LGTM) and the API event (APPROVE / COMMENT / REQUEST_CHANGES) the published version would carry, chosen per the Step 7 table — both, so the user sees the body opener and the GitHub UI label. For an LGTM posted as COMMENT, name the blocking merge condition.
 2. Full review body
 3. Each inline comment with file path and line number
 4. List of DISPROVEN findings (so the user can verify dismissals)
@@ -391,7 +401,7 @@ If `--publish` **was** passed: this output is now an approval gate. Wait for exp
 
 ## Step 9: Publish (only when `--publish` was passed AND user approved in Step 8)
 
-**Gate mode (Step 1.5):** skip 9a (no tracking issues) AND 9b.5 (gate mode never ran Step 2, so there is no business context to reconcile — the readiness note carries none). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-approval check still applies (a prior `EFFECTIVE_VERDICT == APPROVED` survives this comment).
+**Gate mode (Step 1.5):** skip 9a (no tracking issues) AND 9b.5 (gate mode never ran Step 2, so there is no business context to reconcile — the readiness note carries none). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). The proven-defect case from 1.5b posts `REQUEST_CHANGES` instead.
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
@@ -427,7 +437,7 @@ MY_REVIEWS=$(gh api --paginate --slurp "repos/{owner}/{repo}/pulls/$PR_NUMBER/re
 EFFECTIVE_VERDICT=$(jq -r '[.[] | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED")] | last | .state // empty' <<<"$MY_REVIEWS")
 ```
 
-Older reviews stay in the timeline as history — the new one becomes the effective verdict. One caveat GitHub imposes: a `COMMENT` review never dismisses a prior `APPROVED` state, and that approval can sit several reviews back, which is why `EFFECTIVE_VERDICT` scans the whole list rather than the latest entry. When this run publishes a `COMMENT` (gate mode or user-requested comment-only) and `EFFECTIVE_VERDICT == APPROVED`, the approval keeps counting under branch protection even after the new comment posts. Surface this to the user so they can decide whether to dismiss the stale approval — do not dismiss it silently. (`NOT LGTM` → `CHANGES_REQUESTED` supersedes a prior approval, so it needs no dismissal.)
+Older reviews stay in the timeline as history — the new one becomes the effective verdict. One caveat GitHub imposes: a `COMMENT` review never dismisses a prior `APPROVED` or `CHANGES_REQUESTED` state, and that state can sit several reviews back, which is why `EFFECTIVE_VERDICT` scans the whole list rather than the latest entry. When this run publishes a `COMMENT` (any of the Step 7 cases) over a non-empty `EFFECTIVE_VERDICT`, that earlier state keeps counting: a stale approval still satisfies branch protection, a stale change request still blocks. Surface this to the user so they can decide whether to dismiss it — do not dismiss it silently. (`APPROVE` supersedes a prior change request and `REQUEST_CHANGES` a prior approval, so neither needs a dismissal.)
 
 ### 9b.5 Business context continuity
 
@@ -456,7 +466,7 @@ import json, subprocess
 
 review = {
     "commit_id": "<latest PR head SHA>",
-    "event": "APPROVE",  # APPROVE for LGTM, REQUEST_CHANGES for NOT LGTM, COMMENT for gate mode (Step 1.5) or a user-requested comment-only review.
+    "event": "APPROVE",  # Per the Step 7 table: APPROVE only for a mergeable-now LGTM, REQUEST_CHANGES for NOT LGTM, COMMENT otherwise.
     "body": "<review body — first line is `LGTM — ...` or `NOT LGTM — ...`; EXCEPT in gate mode (event COMMENT), where the body is the readiness note with NO verdict word>",
     "comments": [
         {
@@ -479,9 +489,10 @@ After publishing, print the review URL so the user can verify it rendered correc
 ## Important Rules
 
 - **Publish is opt-in**: nothing is sent to GitHub unless the invocation included `--publish` AND the user approved the draft in Step 8. The default mode is local draft only.
-- **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, NO `LGTM` / `NOT LGTM` verdict, and NO dual analysis. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate.
+- **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, NO `LGTM` / `NOT LGTM` verdict, and NO dual analysis. A red check whose log pins the failure on a changed line is a proven defect: `NOT LGTM`, `REQUEST_CHANGES`. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate.
 - **Value/Design gate is a real verdict**: Frames 1-3 can produce `NOT LGTM` on their own — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach — even when the code is correct and tested. These blockers carry the same evidence bar as code findings (where the root cause lives, the deviated spec/contract clause, a concretely-named cleaner alternative); without evidence they are non-blocking design notes.
-- **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body, and the corresponding API event is APPROVE or REQUEST_CHANGES. The only no-verdict path is gate mode (Step 1.5), which posts a `COMMENT` note; COMMENT is otherwise forbidden (unless the user explicitly asked for comment-only).
+- **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body. The no-verdict paths are gate mode (Step 1.5) and a review that cannot reach a final verdict; both post a `COMMENT` that says what is missing.
+- **APPROVE means mergeable now**: every required check green on the exact head and no independent prerequisite open; a real stack's child waiting only for its parent is the one exception. A clean LGTM that cannot merge yet posts as `COMMENT` naming what it waits for — never approve-with-hold. Red CI the diff causes is `REQUEST_CHANGES`.
 - **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
 - **Tests gate (mandatory)**: in any area that already has tests, changed or new code ships with tests, and those tests must cover the full contract — valid use AND rejected/invalid use — not just the happy path. Shallow or absent tests in a tested area = NOT LGTM. (An area with no existing tests gets a recommendation, not a block.)
 - **No-regression gate (mandatory)**: what worked must keep working. A small blast radius is never a license to break it — "few users", "edge case", "rare config" are not acceptable justifications. Only an explicitly declared, migration-documented breaking change may pass, and it is surfaced in the verdict, never silent.
