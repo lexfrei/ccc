@@ -81,21 +81,23 @@ Split the failing checks into two buckets:
 
 The test is: "could this red check plausibly be caused by the diff?" If yes — or if you cannot tell — treat it as code-related and gate. Do not spend a full review proving a defect the CI already caught; hand it back.
 
-When the failing check's log pins the failure on a line the diff changed, the red is a proven defect, not an unclassified one: the gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES`, naming the check and the line. Every other gate case stays a no-verdict `COMMENT`.
+A failure log that points at a line the diff changed is a lead, not proof that the diff caused the failure. The gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES` only when the evidence establishes the mechanism: how the change produces the failure, naming the check and the line. Short of that, it stays a no-verdict `COMMENT` that names the unresolved check and the evidence still missing, and never presents the suspected cause as a confirmed defect. Every other gate case is a no-verdict `COMMENT` too.
 
 ### 1.5c. Gate-mode output
 
 When 1.5a or 1.5b fires, STOP before Step 2 — do NOT run `/branch-review`, Codex, or Claude's analysis. This also skips Ticket Compliance (the `--ticket` pass): no code was reviewed against requirements, so the note makes no compliance claim. Produce a comment-style note with no verdict word, covering:
 
-- What blocks readiness: the conflict and/or the specific failing checks, named.
+- What blocks readiness: the conflict and/or the specific failing checks, named. For a red check whose cause is not established, the evidence still missing.
 - The concrete ask: rebase/resolve conflicts, fix the named checks, then re-request review.
-- Nothing about code quality — you have not reviewed it and must not imply you have.
+- Nothing about code quality beyond the failing check — you have not reviewed the rest and must not imply you have.
+
+The one exception is a 1.5b failure whose mechanism in the diff is established: the note opens with `NOT LGTM`, names the check, the line, and how the change produces the failure, and stays silent on the rest of the code.
 
 Example note (gate form):
 
 > This PR isn't ready for review yet. CI is red on checks that look code-related — `build`, `test (integration)` — and the branch has merge conflicts with `main`. Please rebase to resolve the conflicts, get those checks green, then re-request review. I haven't looked at the code itself yet.
 
-Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE`, and `REQUEST_CHANGES` only for the proven-defect case in 1.5b. In default (draft) mode the note is simply reported to the user and the skill stops.
+Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE`, and `REQUEST_CHANGES` only when 1.5b established how the diff causes the failure. In default (draft) mode the note is simply reported to the user and the skill stops.
 
 If there are no conflicts and no code-related red CI, proceed to Step 1.6.
 
@@ -323,7 +325,7 @@ Real concerns worth surfacing but not blocking this merge:
 
 ## Step 7: Draft the Review with Verdict Gate
 
-**Gate mode (Step 1.5) skips this step entirely** — it produced no findings and no verdict; its deliverable is the readiness note from Step 1.5c, presented in Step 8. Everything below applies only to a full review.
+**Gate mode (Step 1.5) skips this step entirely** — it produced no findings and, outside the established-mechanism case of 1.5b, no verdict; its deliverable is the readiness note from Step 1.5c, presented in Step 8. Everything below applies only to a full review.
 
 The review opens with a textual verdict line. The verdict text and the GitHub API event are two distinct layers:
 
@@ -337,7 +339,7 @@ Use **LGTM** when there are no blockers, **NOT LGTM** when there is at least one
 
 `APPROVE` means "this can merge now", not "the code looks fine". There is no approve-with-hold: an approval on a PR that cannot merge is read as permission to merge it, and branch protection counts it the moment the blocking condition clears. The one exception is a real stack: a PR whose base is its parent's branch may be approved while it waits only for that parent, when its own part is ready.
 
-`COMMENT` carries a verdict word in the merge-state case above and in a user-requested comment-only review. It carries none in gate mode (Step 1.5) and whenever the review cannot reach a final verdict, for example when a blocker-sized question stays UNVERIFIABLE — then the body says what is missing. A `COMMENT` never clears an earlier `APPROVE` or `CHANGES_REQUESTED` (see 9b).
+`COMMENT` carries a verdict word in the merge-state case above and in a user-requested comment-only review. It carries none in gate mode (Step 1.5), whose established-mechanism case is `REQUEST_CHANGES`, and whenever the review cannot reach a final verdict, for example when a blocker-sized question stays UNVERIFIABLE — then the body says what is missing. A `COMMENT` never clears an earlier `APPROVE` or `CHANGES_REQUESTED` (see 9b).
 
 Every finding — blocker or follow-up — is written as one item in the same shape, readable in 30 seconds:
 
@@ -397,7 +399,7 @@ If `--publish` **was** passed: this output is now an approval gate. Wait for exp
 
 ## Step 9: Publish (only when `--publish` was passed AND user approved in Step 8)
 
-**Gate mode (Step 1.5):** skip 9a (no tracking issues). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). The proven-defect case from 1.5b posts `REQUEST_CHANGES` instead.
+**Gate mode (Step 1.5):** skip 9a (no tracking issues). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). A 1.5b failure whose mechanism in the diff is established posts `REQUEST_CHANGES` instead.
 
 Approved maintainer actions (Step 8 item 6) run first, per [`references/maintainer-actions.md`](references/maintainer-actions.md).
 
@@ -470,9 +472,9 @@ After publishing, print the review URL so the user can verify it rendered correc
 ## Important Rules
 
 - **Publish is opt-in**: nothing is sent to GitHub unless the invocation included `--publish` AND the user approved the draft in Step 8. The default mode is local draft only.
-- **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, NO `LGTM` / `NOT LGTM` verdict, and NO dual analysis. A red check whose log pins the failure on a changed line is a proven defect: `NOT LGTM`, `REQUEST_CHANGES`. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate.
+- **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, no `LGTM` / `NOT LGTM` verdict unless the diff's mechanism for a red check is established, and NO dual analysis. A red check becomes `NOT LGTM` / `REQUEST_CHANGES` only when the evidence shows how the diff causes it; a log pointing at a changed line is a lead, and without the mechanism the note names the unresolved check and the missing evidence. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate.
 - **Value/Design gate is a real verdict**: Frames 1-3 can produce `NOT LGTM` on their own — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach — even when the code is correct and tested. These blockers carry the same evidence bar as code findings (where the root cause lives, the deviated spec/contract clause, a concretely-named cleaner alternative); without evidence they are non-blocking design notes.
-- **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body. The no-verdict paths are gate mode (Step 1.5) and a review that cannot reach a final verdict; both post a `COMMENT` that says what is missing.
+- **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body. The no-verdict paths are gate mode (Step 1.5, except a red check whose mechanism in the diff is established) and a review that cannot reach a final verdict; both post a `COMMENT` that says what is missing.
 - **APPROVE means mergeable now**: every required check green on the exact head and no independent prerequisite open; a real stack's child waiting only for its parent is the one exception. A clean LGTM that cannot merge yet posts as `COMMENT` naming what it waits for — never approve-with-hold. Red CI the diff causes is `REQUEST_CHANGES`.
 - **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
 - **Tests gate (mandatory)**: in any area that already has tests, changed or new code ships with tests, and those tests must cover the full contract — valid use AND rejected/invalid use — not just the happy path. Shallow or absent tests in a tested area = NOT LGTM. (An area with no existing tests gets a recommendation, not a block.)
