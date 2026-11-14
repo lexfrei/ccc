@@ -114,10 +114,10 @@ If `mergeStateStatus` comes back `UNKNOWN`, GitHub has not finished computing it
 GitHub's merge state is cached and can lag behind the branch. Before trusting `mergeable == "CONFLICTING"` or `mergeStateStatus == "DIRTY"`, merge locally:
 
 ```bash
-git merge-tree --write-tree --quiet "origin/$PR_BASE" "$PR_HEAD_SHA"; echo $?
+git merge-tree --write-tree "origin/$PR_BASE" "$PR_HEAD_SHA"; echo "exit $?"
 ```
 
-Exit status 1 confirms the conflict. Exit status 0 means the branch merges cleanly and GitHub's state is stale: do not gate, continue the review, and note that GitHub may need a sync before it lets the PR merge. Any other status is an error to report, not a verdict.
+Exit status 1 with a `CONFLICT` line in the output confirms the conflict. Exit status 1 without one is an error, such as a ref that does not resolve: report it, it is not a verdict, and neither is any status other than 0 or 1. Exit status 0 means the branch merges cleanly and GitHub's state is stale: do not gate, continue the review, and note that GitHub may need a sync before it lets the PR merge. GitHub still refuses the merge until its state clears, so the PR is not mergeable now in the Step 7 sense: an LGTM goes out as `COMMENT` naming the stale merge state, never as `APPROVE`.
 
 When the local merge confirms it, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely. A reviewer with write access to the branch does not ask for a conflict with one obvious mechanical answer: the draft proposes syncing the branch per [`references/maintainer-actions.md`](references/maintainer-actions.md) instead. The sync runs only in Step 9, so the synced head is reviewed on the next invocation.
 
@@ -393,8 +393,8 @@ The review opens with a textual verdict line. The verdict text and the GitHub AP
 
 | Textual verdict (first line of body) | Merge state | GitHub API event |
 | --- | --- | --- |
-| `LGTM` | mergeable now: every required check green on the exact head, no independent prerequisite open | `APPROVE` |
-| `LGTM` | not mergeable now: a required check pending or red for a reason outside the diff, or an independent prerequisite (companion PR, joint test, maintainer-side setup) still open | `COMMENT`, the body naming what the merge waits for |
+| `LGTM` | mergeable now: every required check green on the exact head, GitHub's merge state clean, no independent prerequisite open | `APPROVE` |
+| `LGTM` | not mergeable now: a required check pending or red for a reason outside the diff, GitHub still reporting `DIRTY` after a clean local merge (Step 1.5a), or an independent prerequisite (companion PR, joint test, maintainer-side setup) still open | `COMMENT`, the body naming what the merge waits for |
 | `NOT LGTM` | any | `REQUEST_CHANGES` |
 
 Use **LGTM** when there are no blockers, **NOT LGTM** when there is at least one — and a Value/Design blocker (Step 6) counts, so a PR with perfect code still gets `NOT LGTM` when Frames 1-3 reject it. Red CI the diff causes is a blocker like any other proven defect.
@@ -540,7 +540,7 @@ After publishing, print the review URL so the user can verify it rendered correc
 - **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, no `LGTM` / `NOT LGTM` verdict unless the diff's mechanism for a red check is established, and NO dual analysis. A red check becomes `NOT LGTM` / `REQUEST_CHANGES` only when the evidence shows how the diff causes it; a log pointing at a changed line is a lead, and without the mechanism the note names the unresolved check and the missing evidence. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate.
 - **Value/Design gate is a real verdict**: Frames 1-3 can produce `NOT LGTM` on their own — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach — even when the code is correct and tested. These blockers carry the same evidence bar as code findings (where the root cause lives, the deviated spec/contract clause, a concretely-named cleaner alternative); without evidence they are non-blocking design notes.
 - **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body. The no-verdict paths are gate mode (Step 1.5, except a red check whose mechanism in the diff is established) and a review that cannot reach a final verdict; both post a `COMMENT` that says what is missing.
-- **APPROVE means mergeable now**: every required check green on the exact head and no independent prerequisite open; a real stack's child waiting only for its parent is the one exception. A clean LGTM that cannot merge yet posts as `COMMENT` naming what it waits for — never approve-with-hold. Red CI the diff causes is `REQUEST_CHANGES`.
+- **APPROVE means mergeable now**: every required check green on the exact head, GitHub's merge state clean, and no independent prerequisite open; a real stack's child waiting only for its parent is the one exception. A clean LGTM that cannot merge yet posts as `COMMENT` naming what it waits for — never approve-with-hold. Red CI the diff causes is `REQUEST_CHANGES`.
 - **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
 - **Tests gate (mandatory)**: in any area that already has tests, changed or new code ships with tests, and those tests must cover the full contract — valid use AND rejected/invalid use — not just the happy path. Shallow or absent tests in a tested area = NOT LGTM. (An area with no existing tests gets a recommendation, not a block.)
 - **No-regression gate (mandatory)**: what worked must keep working. A small blast radius is never a license to break it — "few users", "edge case", "rare config" are not acceptable justifications. Only an explicitly declared, migration-documented breaking change may pass, and it is surfaced in the verdict, never silent.
