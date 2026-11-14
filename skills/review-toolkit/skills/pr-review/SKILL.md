@@ -99,6 +99,13 @@ Split the failing checks into two buckets:
 
 The test is: "could this red check plausibly be caused by the diff?" If yes — or if you cannot tell — treat it as code-related and gate. Do not spend a full review proving a defect the CI already caught; hand it back.
 
+A check in a code-related bucket can still fail on its environment. Two cases leave the gate, each on evidence the log or the diff provides:
+
+- **The diff provably cannot reach the failing step.** The step failed before anything the diff changes ran (a registry login refused before the first test), or the diff does not change what the step consumes (a values-only change whose rendered output is byte-identical). Propose one rerun as a maintainer action.
+- **The base is stale.** The branch is far behind its base and the failure matches what the base has since changed (an old controller rejecting a kind the base now ships). Propose a sync per [`references/maintainer-actions.md`](references/maintainer-actions.md).
+
+Without that evidence, the check gates as above.
+
 A failure log that points at a line the diff changed is a lead, not proof that the diff caused the failure. The gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES` only when the evidence establishes the mechanism: how the change produces the failure, naming the check and the line. Short of that, it stays a no-verdict `COMMENT` that names the unresolved check and the evidence still missing, and never presents the suspected cause as a confirmed defect. Every other gate case is a no-verdict `COMMENT` too.
 
 ### 1.5c. Gate-mode output
@@ -411,7 +418,7 @@ Present:
 3. Each inline comment with file path and line number
 4. List of DISPROVEN findings (so the user can verify dismissals)
 5. Drafts of any tracking issues (title + body) that publish-mode would file in Step 9 — title, target repo, and full body
-6. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals
+6. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals, a rerun of an environment failure
 
 **Gate mode (Step 1.5):** present only the readiness note and the concrete ask — there are no inline comments, DISPROVEN list, or tracking issues, and no findings beyond the one an established-mechanism note carries, because no code review was performed. The approval gate below still applies before any `--publish`.
 

@@ -20,6 +20,10 @@ Approve `action_required` runs (`POST /repos/{owner}/{repo}/actions/runs/{id}/ap
 
 Do not approve old `action_required` runs on a stale base: a run built from an old merge ref can fail on drift that is not the PR's fault. Sync the branch first (above), then approve the fresh runs on the new head.
 
+## Rerun of an environment failure
+
+Rerun a failed run (`POST /repos/{owner}/{repo}/actions/runs/{id}/rerun-failed-jobs`) once, and only when the evidence shows the diff cannot reach the failing step. A second failure of the same step is a finding to judge, not a reason for another rerun.
+
 ## Stacked PRs after a parent merges
 
 Merging the parent of a native GitHub stack retargets and rewrites every child branch. For each child, check:
