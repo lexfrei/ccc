@@ -1,9 +1,9 @@
 ---
 name: pr-review
 description: >
-  Draft a GitHub PR review with inline comments. Opens with a readiness gate (stops on merge conflicts or red code-related CI with a fix-it note and no verdict, or NOT LGTM when the diff's mechanism for a red check is established), then runs the five-frame substance pass (problem real & root cause in-repo / approach optimal & worth its permanent cost / tradeoffs & scope / docs sync / code quality), cascades /branch-review, performs sequential Claude+Codex dual-model analysis on the PR diff, cross-validates every finding with explicit evidence, and presents the draft for approval. Process and provenance requirements (commit format, sign-off, AI use and its disclosure) come from the project's published contract — `CONTRIBUTING.md`, `AGENTS.md`, and the policies they link, read at the base branch — and block only on a clause it states; style alone never proves AI authorship. A value/design gate can block a PR even when the code is flawless — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach. Publishing the review to GitHub is opt-in via `--publish`; without it the draft is the deliverable. Reviews open with an LGTM or NOT LGTM verdict (matching the /branch-review convention); the no-verdict paths are the readiness gate's fix-CI / fix-conflicts note and a review that cannot reach a final verdict. An LGTM is published as APPROVE only when the PR can merge right now; otherwise it goes out as COMMENT naming what the merge waits for.
+  Draft a GitHub PR review with inline comments, verified findings, and an LGTM or NOT LGTM verdict; publish it to GitHub only with `--publish` after the user approves the draft. An LGTM goes out as APPROVE only when the PR can merge right now.
   TRIGGER: invoke proactively whenever the user asks to review, audit, or quality-check a GitHub Pull Request — whether by URL (github.com/.../pull/N), shorthand (owner/repo#N), bare number (#1234), or a "this PR" / "этот PR" reference resolvable from conversation context. Examples — "review PR 2541", "сделай ревью на https://github.com/foo/bar/pull/123", "оцени этот PR", "что думаешь про #9", "проверь PR от X". DO NOT trigger for — replying to existing review comments (use /address-pr-comments), labeling or triaging issues (use /categorize), generating a TLDR (use /tldrpr), or general code questions about a branch with no associated PR. PR vs issue is detected automatically — for issues without code-review intent, do not invoke.
-argument-hint: "[PR number] [--publish] [--approve] [--target branch] [--ticket URL|ID]"
+argument-hint: "[PR number] [--publish] [--target branch] [--ticket URL|ID]"
 ---
 
 **CRITICAL**: When `--publish` is passed, this skill produces a PUBLISHED GitHub review visible to the PR author and all watchers. Every word matters. Every claim must be proven. User MUST approve the text before publishing.
@@ -15,8 +15,7 @@ Default behavior is **draft only**: the skill performs the full analysis, presen
 Parse $ARGUMENTS for:
 
 - PR number (positional, optional). If omitted, detect from current branch: `gh pr view --json number --jq .number 2>/dev/null`
-- `--publish` — actually post the review to GitHub via the API. Without this flag the skill stops after presenting the draft; the draft is the deliverable. Required separately from `--approve` so that the LGTM/NOT-LGTM decision and the publish action are independent.
-- `--approve` — submit as LGTM (APPROVE event) explicitly even when no blockers found (default verdict policy is LGTM without blockers, so this flag is informational). Has no effect unless `--publish` is also set.
+- `--publish` — actually post the review to GitHub via the API. Without this flag the skill stops after presenting the draft; the draft is the deliverable.
 - `--target` — target branch override (passed through to `/branch-review`)
 - `--ticket` — external ticket reference (URL or ID) for cross-referencing requirements beyond the PR description; activates the Ticket Compliance section in the output
 
@@ -58,6 +57,35 @@ Print the current commit hash, commit count, file count, and file list so the us
 
 Shell state does not survive between tool calls, so later steps substitute the printed literal values for these variables. Every later step that reads files or runs a tool works inside `$PR_WORKTREE`. Never `checkout` or `reset` in the user's repository. When the run ends (after Step 8 in draft mode, after Step 9 when publishing, gate mode included), remove what this step created: `git worktree remove --force "$PR_WORKTREE"`, `git update-ref -d "refs/pr-review/$PR_NUMBER"`, and `rm -r "$PR_TMP"` with the payloads Step 9 wrote there.
 
+## Step 1.4: Head That Only Gained a Base Merge
+
+On a re-review, `PRIOR_SHA` is the head of your latest verdict, and only when that verdict is LGTM: the `commit_id` of your latest review that carries a verdict, or the head the user names (the source when no verdict was published, as in draft mode). When the latest verdict is `NOT LGTM`, there is no `PRIOR_SHA` and the re-review is full, even if an older LGTM exists: it may be a gate note that judged a CI result and no code. A reply in a thread judged nothing and never counts. An approval that branch protection dismissed when the base was merged still counts. For a head the user names, set `PRIOR` to that SHA instead of reading it from the API: a bare SHA leaves `PRIOR_AT` empty, and with no review time any base change in the PR's history forces a full review.
+
+```bash
+ME=$(gh api user --jq .login)
+PRIOR=$(gh api --paginate --slurp "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" | jq -r --arg me "$ME" '[.[][] | select(.user.login == $me) | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or ((.state == "COMMENTED" or .state == "DISMISSED") and (.body | test("^(NOT )?LGTM"))))] | last // empty | select(.state == "APPROVED" or (.body | test("^LGTM"))) | "\(.commit_id) \(.submitted_at)"')
+PRIOR_SHA=${PRIOR%% *}; PRIOR_AT=${PRIOR#"$PRIOR_SHA"}; PRIOR_AT=${PRIOR_AT# }
+
+# A retarget changes what the PR merges into without touching its head: the diff against the new base is not the one reviewed
+RETARGETS=$(gh api --paginate --slurp "repos/{owner}/{repo}/issues/$PR_NUMBER/timeline" | jq --arg t "$PRIOR_AT" '[.[][] | select(.event == "base_ref_changed" and .created_at > $t)] | length')
+```
+
+When the new head is exactly the prior head plus the base's changes (a merge of the base, or a rebase onto it with no conflict), a full re-review is wasted work. Compare trees, not diffs: a diff without positions or blob hashes misses a moved line and a changed binary file.
+
+```bash
+# After a force-push the prior head is reachable from no local ref; GitHub serves it by SHA
+git fetch --quiet origin "$PRIOR_SHA" 2>/dev/null
+[ -n "$PRIOR_SHA" ] && [ "$RETARGETS" = 0 ] &&
+  mb=$(git merge-base "origin/$PR_BASE" "$PR_HEAD_SHA") &&
+  expected=$(git merge-tree --write-tree "$mb" "$PRIOR_SHA") &&
+  [ "$expected" = "$(git rev-parse "$PR_HEAD_SHA^{tree}")" ] &&
+  echo "own diff unchanged" || echo "full review"
+```
+
+Every failure path ends in `full review`: an empty `PRIOR_SHA`, a base changed after the prior verdict, a prior head gone from the repository, a conflict the author resolved by hand (`merge-tree` exits 1), or any other content the base does not explain.
+
+When it prints `own diff unchanged`, skip Steps 1.6 to 6, Ticket Compliance included: run the readiness gate (Step 1.5) on the new head, then draft per Step 7. The body says the PR's diff is unchanged since the review at `PRIOR_SHA`, that the earlier verdict stands on that basis alone, and that a semantic conflict with the new base is left to the new head's CI. This path proves only that the diff did not change. It does not re-check anything the earlier round cleared, and the body must not present those clearances as re-verified.
+
 ## Step 1.5: Readiness Gate (CI + Mergeability)
 
 Before spending any effort on substance or code analysis, do a fast pass on whether the PR is even in a reviewable state. This is a quick check, not the review. Two independent conditions send the review into **gate mode** — an early exit that produces a comment-style note with NO `LGTM` / `NOT LGTM` verdict, because a verdict on a PR that cannot merge or does not build is noise, and it wastes the expensive analysis on code the author still has to change.
@@ -72,13 +100,26 @@ gh pr view $PR_NUMBER --json statusCheckRollup \
 
 # Required checks only: Step 7 needs them to choose between APPROVE and COMMENT
 gh pr checks $PR_NUMBER --required --json name,bucket
+
+# Runs on this exact head that wait for a maintainer's approval
+gh api "repos/{owner}/{repo}/actions/runs?head_sha=$PR_HEAD_SHA&status=action_required" --jq '.workflow_runs[] | {id, name}'
 ```
+
+List every `action_required` run in the draft. A new head, including one that only merged the base, starts its runs over, and they wait for approval again.
 
 If `mergeStateStatus` comes back `UNKNOWN`, GitHub has not finished computing it — wait a few seconds and re-query once before deciding.
 
 ### 1.5a. Merge conflicts (DIRTY)
 
-If `mergeable == "CONFLICTING"` or `mergeStateStatus == "DIRTY"`, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely. A reviewer with write access to the branch does not ask for a conflict with one obvious mechanical answer: the draft proposes syncing the branch per [`references/maintainer-actions.md`](references/maintainer-actions.md) instead, and the review runs on the synced head.
+GitHub's merge state is cached and can lag behind the branch. Before trusting `mergeable == "CONFLICTING"` or `mergeStateStatus == "DIRTY"`, merge locally:
+
+```bash
+git merge-tree --write-tree --quiet "origin/$PR_BASE" "$PR_HEAD_SHA"; echo $?
+```
+
+Exit status 1 confirms the conflict. Exit status 0 means the branch merges cleanly and GitHub's state is stale: do not gate, continue the review, and note that GitHub may need a sync before it lets the PR merge. Any other status is an error to report, not a verdict.
+
+When the local merge confirms it, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely. A reviewer with write access to the branch does not ask for a conflict with one obvious mechanical answer: the draft proposes syncing the branch per [`references/maintainer-actions.md`](references/maintainer-actions.md) instead. The sync runs only in Step 9, so the synced head is reviewed on the next invocation.
 
 ### 1.5b. Red CI plausibly tied to the code
 
@@ -90,6 +131,13 @@ Split the failing checks into two buckets:
 - **Not code-related** — missing secrets on a fork PR, a flaky external service, a rate-limited registry, an unrelated required-check misconfiguration, a DCO/label bot. These do NOT gate; note them and continue the normal review.
 
 The test is: "could this red check plausibly be caused by the diff?" If yes — or if you cannot tell — treat it as code-related and gate. Do not spend a full review proving a defect the CI already caught; hand it back.
+
+A check in a code-related bucket can still fail on its environment. Two cases leave the gate, each on evidence the log or the diff provides:
+
+- **The diff provably cannot reach the failing step.** The step failed before anything the diff changes ran (a registry login refused before the first test), or the diff does not change what the step consumes (a values-only change whose rendered output is byte-identical). Propose one rerun as a maintainer action.
+- **The base is stale.** The branch is far behind its base and the failure matches what the base has since changed (an old controller rejecting a kind the base now ships). Propose a sync per [`references/maintainer-actions.md`](references/maintainer-actions.md).
+
+In both cases the review continues on the current head. The rerun or sync runs only in Step 9, so the fresh result is not known yet: an LGTM goes out as `COMMENT` naming the pending run, and the fresh run is judged on the next invocation (for a synced head, Step 1.4 decides how much to re-review). Without that evidence, the check gates as above.
 
 A failure log that points at a line the diff changed is a lead, not proof that the diff caused the failure. The gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES` only when the evidence establishes the mechanism: how the change produces the failure, naming the check and the line. Short of that, it stays a no-verdict `COMMENT` that names the unresolved check and the evidence still missing, and never presents the suspected cause as a confirmed defect. Every other gate case is a no-verdict `COMMENT` too.
 
@@ -109,7 +157,7 @@ Example note (gate form):
 
 Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE`, and `REQUEST_CHANGES` only when 1.5b established how the diff causes the failure. In default (draft) mode the note is simply reported to the user and the skill stops.
 
-If there are no conflicts and no code-related red CI, proceed to Step 1.6.
+If there are no conflicts and no code-related red CI, proceed to Step 1.6, or to Step 7 on the Step 1.4 short path.
 
 ## Step 1.6: Check Bot Comments
 
@@ -339,7 +387,7 @@ Real concerns worth surfacing but not blocking this merge:
 
 ## Step 7: Draft the Review with Verdict Gate
 
-**Gate mode (Step 1.5) skips this step entirely** — it produced no findings beyond the one an established-mechanism note carries and, outside that case of 1.5b, no verdict; its deliverable is the readiness note from Step 1.5c, presented in Step 8. Everything below applies only to a full review.
+**Gate mode (Step 1.5) skips this step entirely** — it produced no findings beyond the one an established-mechanism note carries and, outside that case of 1.5b, no verdict; its deliverable is the readiness note from Step 1.5c, presented in Step 8. Everything below applies to a full review and to the Step 1.4 short path.
 
 The review opens with a textual verdict line. The verdict text and the GitHub API event are two distinct layers:
 
@@ -403,7 +451,7 @@ Present:
 3. Each inline comment with file path and line number
 4. List of DISPROVEN findings (so the user can verify dismissals)
 5. Drafts of any tracking issues (title + body) that publish-mode would file in Step 9 — title, target repo, and full body
-6. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals
+6. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals, a rerun of an environment failure
 
 **Gate mode (Step 1.5):** present only the readiness note and the concrete ask — there are no inline comments, DISPROVEN list, or tracking issues, and no findings beyond the one an established-mechanism note carries, because no code review was performed. The approval gate below still applies before any `--publish`.
 
@@ -462,7 +510,7 @@ Always POST, never PUT. Write the payload to a file as in 9a:
 import json
 
 review = {
-    "commit_id": "<latest PR head SHA>",
+    "commit_id": "<$PR_HEAD_SHA: the head this review was computed on, never a head a Step 9 sync produced>",
     "event": "APPROVE",  # Per the Step 7 table: APPROVE only for a mergeable-now LGTM, REQUEST_CHANGES for NOT LGTM, COMMENT otherwise.
     "body": "<review body — first line is `LGTM — ...` or `NOT LGTM — ...`; EXCEPT in gate mode, where the body is the readiness note: no verdict word under COMMENT, opening with `NOT LGTM` under REQUEST_CHANGES when the 1.5b mechanism is established>",
     "comments": [
