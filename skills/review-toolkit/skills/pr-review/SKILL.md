@@ -419,19 +419,20 @@ Approved maintainer actions (Step 8 item 6) run first, per [`references/maintain
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
+Payloads go through a file, never stdin: a hook that inspects outgoing text reads the file named by `--input`, and refuses a call whose body it cannot see. Write each payload with `json.dump` (shell escaping of complex bodies is unreliable) into `$PR_TMP`, then post it in a separate command.
+
 For each approved tracking issue:
 
 ```python
-import json, subprocess
+import json
 
-issue = {"title": "<title>", "body": "<body>"}
-result = subprocess.run(
-    ["gh", "api", "repos/<owner>/<docs-repo>/issues",
-     "--method", "POST", "--input", "-"],
-    input=json.dumps(issue), text=True, capture_output=True
-)
-data = json.loads(result.stdout)
-print("Issue URL:", data["html_url"])
+payload = "<value of $PR_TMP>/issue-1.json"
+with open(payload, "w") as f:
+    json.dump({"title": "<title>", "body": "<body>"}, f)
+```
+
+```bash
+gh api "repos/<owner>/<docs-repo>/issues" --method POST --input "$PR_TMP/issue-1.json" --jq .html_url
 ```
 
 Capture each URL and splice it into the review body under the relevant non-blocking follow-up.
@@ -455,10 +456,10 @@ Older reviews stay in the timeline as history — the new one becomes the effect
 
 ### 9c. Create the review
 
-Always POST, never PUT. Use python3 + `json.dumps` (shell escaping of complex review bodies is unreliable):
+Always POST, never PUT. Write the payload to a file as in 9a:
 
 ```python
-import json, subprocess
+import json
 
 review = {
     "commit_id": "<latest PR head SHA>",
@@ -474,11 +475,13 @@ review = {
     ]
 }
 
-subprocess.run(
-    ["gh", "api", f"repos/{owner}/{repo}/pulls/{pr_number}/reviews",
-     "--method", "POST", "--input", "-"],
-    input=json.dumps(review), text=True
-)
+payload = "<value of $PR_TMP>/review.json"
+with open(payload, "w") as f:
+    json.dump(review, f)
+```
+
+```bash
+gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" --method POST --input "$PR_TMP/review.json" --jq .html_url
 ```
 
 After publishing, print the review URL so the user can verify it rendered correctly.
@@ -504,5 +507,5 @@ After publishing, print the review URL so the user can verify it rendered correc
 - **No private infrastructure details**: never mention cluster names, client names, internal IPs, or environment identifiers.
 - **No internal tool names**: do not name slash commands, skills, or plugin paths in the published body.
 - **Never update a published review**: `PUT .../reviews/{id}` is forbidden in every mode, including a re-review that lands the same verdict as the last one. A submitted review is a dated statement someone already read and possibly replied to; rewriting its body edits that history and, because the endpoint cannot change the event, can leave the body and the GitHub verdict label disagreeing. Every publish POSTs a new review, which becomes the effective verdict and leaves each earlier round readable in the timeline.
-- **Always use `origin/` refs**: when computing diffs locally, ALWAYS use `origin/<branch>`. Bare branch names go stale and produce phantom diffs.
 - **The user's checkout is never touched**: the PR head is fetched from `pull/<N>/head` and reviewed in a detached worktree, removed when the run ends. Codex runs a fork PR's code sandboxed without network unless the user approves lifting it for that PR.
+- **Always use `origin/` refs**: when computing diffs locally, ALWAYS use `origin/<branch>`. Bare branch names go stale and produce phantom diffs.
