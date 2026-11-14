@@ -57,6 +57,8 @@ Examples:
 REVIEW_BRANCH=$(git branch --show-current)
 # With path argument:
 REVIEW_BRANCH=$(git -C <path> branch --show-current)
+# A detached HEAD (a PR head fetched by SHA) has no branch name
+[ -n "$REVIEW_BRANCH" ] || REVIEW_BRANCH="detached HEAD"
 ```
 
 Determine target branch (the branch this PR is merging INTO):
@@ -79,7 +81,7 @@ Determine target branch (the branch this PR is merging INTO):
 Find the merge base (the point where the branch being reviewed diverged from the target) and record the head being reviewed:
 
 ```bash
-MERGE_BASE=$(git -C <path> merge-base $REVIEW_BRANCH <target-branch>)
+MERGE_BASE=$(git -C <path> merge-base HEAD <target-branch>)
 REVIEW_HEAD=$(git -C <path> rev-parse HEAD)
 ```
 
