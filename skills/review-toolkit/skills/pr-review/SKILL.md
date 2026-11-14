@@ -119,7 +119,7 @@ git merge-tree --write-tree --quiet "origin/$PR_BASE" "$PR_HEAD_SHA"; echo $?
 
 Exit status 1 confirms the conflict. Exit status 0 means the branch merges cleanly and GitHub's state is stale: do not gate, continue the review, and note that GitHub may need a sync before it lets the PR merge. Any other status is an error to report, not a verdict.
 
-When the local merge confirms it, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely. A reviewer with write access to the branch does not ask for a conflict with one obvious mechanical answer: the draft proposes syncing the branch per [`references/maintainer-actions.md`](references/maintainer-actions.md) instead, and the review runs on the synced head.
+When the local merge confirms it, the branch conflicts with its base. The diff cannot be trusted — "what changed" is unstable until the author rebases, and any finding computed against a conflicted tree may be an artifact of the conflict rather than the change. **Do not render a verdict.** Enter gate mode: the deliverable is a short note asking the author to resolve the conflicts and re-request review. Skip the dual analysis entirely. A reviewer with write access to the branch does not ask for a conflict with one obvious mechanical answer: the draft proposes syncing the branch per [`references/maintainer-actions.md`](references/maintainer-actions.md) instead. The sync runs only in Step 9, so the synced head is reviewed on the next invocation.
 
 ### 1.5b. Red CI plausibly tied to the code
 
@@ -510,7 +510,7 @@ Always POST, never PUT. Write the payload to a file as in 9a:
 import json
 
 review = {
-    "commit_id": "<latest PR head SHA>",
+    "commit_id": "<$PR_HEAD_SHA: the head this review was computed on, never a head a Step 9 sync produced>",
     "event": "APPROVE",  # Per the Step 7 table: APPROVE only for a mergeable-now LGTM, REQUEST_CHANGES for NOT LGTM, COMMENT otherwise.
     "body": "<review body — first line is `LGTM — ...` or `NOT LGTM — ...`; EXCEPT in gate mode, where the body is the readiness note: no verdict word under COMMENT, opening with `NOT LGTM` under REQUEST_CHANGES when the 1.5b mechanism is established>",
     "comments": [
