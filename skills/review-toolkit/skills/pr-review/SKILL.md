@@ -63,7 +63,7 @@ On a re-review, `PRIOR_SHA` is the head of your latest verdict, and only when th
 
 ```bash
 ME=$(gh api user --jq .login)
-PRIOR=$(gh api --paginate --slurp "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" | jq -r --arg me "$ME" '[.[][] | select(.user.login == $me) | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or ((.state == "COMMENTED" or .state == "DISMISSED") and (.body | test("^(NOT )?LGTM"))))] | last // empty | select(.state == "APPROVED" or (.body | test("^LGTM"))) | "\(.commit_id) \(.submitted_at)"')
+PRIOR=$(gh api --paginate --slurp "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" | jq -r --arg me "$ME" '[.[][] | select(.user.login == $me) | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or ((.state == "COMMENTED" or .state == "DISMISSED") and ((.body // "") | test("^(NOT )?LGTM"))))] | last // empty | select(.state == "APPROVED" or ((.body // "") | test("^LGTM"))) | "\(.commit_id) \(.submitted_at)"')
 PRIOR_SHA=${PRIOR%% *}; PRIOR_AT=${PRIOR#"$PRIOR_SHA"}; PRIOR_AT=${PRIOR_AT# }
 
 # A retarget changes what the PR merges into without touching its head: the diff against the new base is not the one reviewed
