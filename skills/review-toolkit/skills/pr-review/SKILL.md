@@ -72,7 +72,12 @@ gh pr view $PR_NUMBER --json statusCheckRollup \
 
 # Required checks only: Step 7 needs them to choose between APPROVE and COMMENT
 gh pr checks $PR_NUMBER --required --json name,bucket
+
+# Runs on this exact head that wait for a maintainer's approval
+gh api "repos/{owner}/{repo}/actions/runs?head_sha=$PR_HEAD_SHA&status=action_required" --jq '.workflow_runs[] | {id, name}'
 ```
+
+List every `action_required` run in the draft. A new head, including one that only merged the base, starts its runs over, and they wait for approval again.
 
 If `mergeStateStatus` comes back `UNKNOWN`, GitHub has not finished computing it — wait a few seconds and re-query once before deciding.
 
