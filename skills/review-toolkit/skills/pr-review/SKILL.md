@@ -33,12 +33,20 @@ Before any analysis, fetch ALL remote refs and verify the PR scope via GitHub AP
 git fetch origin
 
 # Get PR metadata from the API — this is the ONLY authoritative source for PR scope
-PR_BRANCH=$(gh pr view $PR_NUMBER --json headRefName --jq .headRefName)
 PR_BASE=$(gh pr view $PR_NUMBER --json baseRefName --jq .baseRefName)
+PR_HEAD_SHA=$(gh pr view $PR_NUMBER --json headRefOid --jq .headRefOid)
+PR_IS_FORK=$(gh pr view $PR_NUMBER --json isCrossRepository --jq .isCrossRepository)
 
-# Checkout and reset to remote head
-git checkout $PR_BRANCH
-git reset --hard origin/$PR_BRANCH
+# The base repo serves every PR head at pull/<N>/head, fork or not; a fork branch is not on origin
+git fetch origin "+pull/$PR_NUMBER/head:refs/pr-review/$PR_NUMBER"
+# A mismatch means a push landed in between, or origin is not the base repo: re-read and stop if it persists
+test "$(git rev-parse "refs/pr-review/$PR_NUMBER")" = "$PR_HEAD_SHA" || { echo "PR head mismatch"; exit 1; }
+
+# Detached worktree: the user's checkout, branches, and uncommitted work stay untouched
+PR_TMP=$(mktemp -d)
+PR_WORKTREE="$PR_TMP/pr-$PR_NUMBER"
+git worktree add --detach "$PR_WORKTREE" "$PR_HEAD_SHA"
+echo "PR_TMP=$PR_TMP PR_WORKTREE=$PR_WORKTREE PR_IS_FORK=$PR_IS_FORK"
 
 # Verify PR scope via API — do NOT trust local git diff for file count
 gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" --jq '{commits: .commits, changed_files: .changed_files}'
@@ -46,7 +54,9 @@ gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/files" --jq '.[].filename'
 gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/commits" --jq '.[] | "\(.sha[:8]) \(.commit.message | split("\n")[0])"'
 ```
 
-Print the current commit hash, commit count, file count, and file list so the user can confirm this is the right state. If the local `git diff origin/$PR_BASE...$PR_BRANCH --stat` shows different files than the API, **trust the API** and investigate the local discrepancy before proceeding.
+Print the current commit hash, commit count, file count, and file list so the user can confirm this is the right state. If the local `git diff origin/$PR_BASE...$PR_HEAD_SHA --stat` shows different files than the API, **trust the API** and investigate the local discrepancy before proceeding.
+
+Shell state does not survive between tool calls, so later steps substitute the printed literal values for these variables. Every later step that reads files or runs a tool works inside `$PR_WORKTREE`. Never `checkout` or `reset` in the user's repository. When the run ends (after Step 8 in draft mode, after Step 9 when publishing, gate mode included), remove what this step created: `git worktree remove --force "$PR_WORKTREE"`, `git update-ref -d "refs/pr-review/$PR_NUMBER"`, and `rm -r "$PR_TMP"` with the payloads Step 9 wrote there.
 
 ## Step 1.5: Readiness Gate (CI + Mergeability)
 
@@ -178,7 +188,7 @@ Run two analyses in sequence, then merge.
 
 Invoke the `/branch-review` skill with `--target $PR_BASE` (and `--ticket <ticket>` if provided; on a re-review round also `--round1-head <sha>` from the first round's output header — the `Reviewed <branch> at <sha>` line — and include the prior round's origin ratio in the invocation context so its convergence rule can fire). It owns its own rules — LGTM/NOT LGTM verdict, merge-base attribution (introduced / worsened / interacted-with defects block; purely pre-existing ones go to its "Found outside this diff" section), comments-as-fixes are blockers, remedy proportionality (changed logic needs a test in the existing test surface; a new checker, linter rule, CI job, or guard script is never a required remedy), doc accuracy for docs the diff made wrong. Do NOT duplicate those rules here. Capture its verdict and BOTH of its finding sections.
 
-If `/branch-review` is invoked from a directory whose active branch is not the PR branch, it creates a temporary worktree internally — see its SKILL.md for the worktree workflow.
+Pass `$PR_WORKTREE` as its positional path argument, so it reviews that tree and creates no worktree of its own. The tree is a detached HEAD at the PR head; branch-review takes the merge base from `HEAD`, not from a branch name.
 
 ### 4b. Codex review (synchronous, blocking)
 
@@ -188,13 +198,21 @@ Check that the `codex` CLI is available:
 command -v codex && codex --version
 ```
 
-If available, run `codex review` against the PR's base branch **synchronously** (NOT in background). Use a 10-minute timeout. The `--base` flag and `[PROMPT]` argument are **mutually exclusive** — pass only `--base`:
+If available, run `codex review` from `$PR_WORKTREE` against the PR's base branch **synchronously** (NOT in background). Use a 10-minute timeout. The `--base` flag and `[PROMPT]` argument are **mutually exclusive** — pass only `--base`.
+
+The sandbox depends on who wrote the code Codex will build and test:
 
 ```bash
-codex review --base $PR_BASE --config 'sandbox_mode="danger-full-access"'
+cd "$PR_WORKTREE" || exit 1
+if [ "$PR_IS_FORK" = "false" ]; then
+  codex review --base "origin/$PR_BASE" --config 'sandbox_mode="danger-full-access"'
+else
+  # Fork, or the value was lost: writes stay in the worktree, no network
+  codex review --base "origin/$PR_BASE" --config 'sandbox_mode="workspace-write"' --config 'sandbox_workspace_write.network_access=false'
+fi
 ```
 
-The sandbox is fully disabled so Codex can run build tools, tests, and access the network without restrictions.
+A fork PR is code from someone without write access to the repository. With the sandbox off, its build scripts and tests run with network access and every credential in the environment. Keep the sandbox for fork PRs. Lift it only after the user explicitly approves it for this PR, and only after the diff was read for anything that reaches for the network, secrets, or obfuscated content. A same-repo PR runs unsandboxed, so Codex can run build tools, tests, and fetch dependencies.
 
 **CRITICAL**: Do NOT use `run_in_background`. The Bash call MUST block until Codex completes. Save the full Codex output before proceeding.
 
@@ -487,3 +505,4 @@ After publishing, print the review URL so the user can verify it rendered correc
 - **No internal tool names**: do not name slash commands, skills, or plugin paths in the published body.
 - **Never update a published review**: `PUT .../reviews/{id}` is forbidden in every mode, including a re-review that lands the same verdict as the last one. A submitted review is a dated statement someone already read and possibly replied to; rewriting its body edits that history and, because the endpoint cannot change the event, can leave the body and the GitHub verdict label disagreeing. Every publish POSTs a new review, which becomes the effective verdict and leaves each earlier round readable in the timeline.
 - **Always use `origin/` refs**: when computing diffs locally, ALWAYS use `origin/<branch>`. Bare branch names go stale and produce phantom diffs.
+- **The user's checkout is never touched**: the PR head is fetched from `pull/<N>/head` and reviewed in a detached worktree, removed when the run ends. Codex runs a fork PR's code sandboxed without network unless the user approves lifting it for that PR.
