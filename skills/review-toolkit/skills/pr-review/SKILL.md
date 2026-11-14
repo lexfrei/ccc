@@ -58,6 +58,35 @@ Print the current commit hash, commit count, file count, and file list so the us
 
 Shell state does not survive between tool calls, so later steps substitute the printed literal values for these variables. Every later step that reads files or runs a tool works inside `$PR_WORKTREE`. Never `checkout` or `reset` in the user's repository. When the run ends (after Step 8 in draft mode, after Step 9 when publishing, gate mode included), remove what this step created: `git worktree remove --force "$PR_WORKTREE"`, `git update-ref -d "refs/pr-review/$PR_NUMBER"`, and `rm -r "$PR_TMP"` with the payloads Step 9 wrote there.
 
+## Step 1.4: Head That Only Gained a Base Merge
+
+On a re-review, `PRIOR_SHA` is the head of your latest verdict, and only when that verdict is LGTM: the `commit_id` of your latest review that carries a verdict, or the head the user names (the source when no verdict was published, as in draft mode). When the latest verdict is `NOT LGTM`, there is no `PRIOR_SHA` and the re-review is full, even if an older LGTM exists: it may be a gate note that judged a CI result and no code. A reply in a thread judged nothing and never counts. An approval that branch protection dismissed when the base was merged still counts. For a head the user names, set `PRIOR` to that SHA instead of reading it from the API: a bare SHA leaves `PRIOR_AT` empty, and with no review time any base change in the PR's history forces a full review.
+
+```bash
+ME=$(gh api user --jq .login)
+PRIOR=$(gh api --paginate --slurp "repos/{owner}/{repo}/pulls/$PR_NUMBER/reviews" | jq -r --arg me "$ME" '[.[][] | select(.user.login == $me) | select(.state == "APPROVED" or .state == "CHANGES_REQUESTED" or ((.state == "COMMENTED" or .state == "DISMISSED") and (.body | test("^(NOT )?LGTM"))))] | last // empty | select(.state == "APPROVED" or (.body | test("^LGTM"))) | "\(.commit_id) \(.submitted_at)"')
+PRIOR_SHA=${PRIOR%% *}; PRIOR_AT=${PRIOR#"$PRIOR_SHA"}; PRIOR_AT=${PRIOR_AT# }
+
+# A retarget changes what the PR merges into without touching its head: the diff against the new base is not the one reviewed
+RETARGETS=$(gh api --paginate --slurp "repos/{owner}/{repo}/issues/$PR_NUMBER/timeline" | jq --arg t "$PRIOR_AT" '[.[][] | select(.event == "base_ref_changed" and .created_at > $t)] | length')
+```
+
+When the new head is exactly the prior head plus the base's changes (a merge of the base, or a rebase onto it with no conflict), a full re-review is wasted work. Compare trees, not diffs: a diff without positions or blob hashes misses a moved line and a changed binary file.
+
+```bash
+# After a force-push the prior head is reachable from no local ref; GitHub serves it by SHA
+git fetch --quiet origin "$PRIOR_SHA" 2>/dev/null
+[ -n "$PRIOR_SHA" ] && [ "$RETARGETS" = 0 ] &&
+  mb=$(git merge-base "origin/$PR_BASE" "$PR_HEAD_SHA") &&
+  expected=$(git merge-tree --write-tree "$mb" "$PRIOR_SHA") &&
+  [ "$expected" = "$(git rev-parse "$PR_HEAD_SHA^{tree}")" ] &&
+  echo "own diff unchanged" || echo "full review"
+```
+
+Every failure path ends in `full review`: an empty `PRIOR_SHA`, a base changed after the prior verdict, a prior head gone from the repository, a conflict the author resolved by hand (`merge-tree` exits 1), or any other content the base does not explain.
+
+When it prints `own diff unchanged`, skip Steps 1.6 to 6, Ticket Compliance included: run the readiness gate (Step 1.5) on the new head, then draft per Step 7. The body says the PR's diff is unchanged since the review at `PRIOR_SHA`, that the earlier verdict stands on that basis alone, and that a semantic conflict with the new base is left to the new head's CI. This path proves only that the diff did not change. It does not re-check anything the earlier round cleared, and the body must not present those clearances as re-verified.
+
 ## Step 1.5: Readiness Gate (CI + Mergeability)
 
 Before spending any effort on substance or code analysis, do a fast pass on whether the PR is even in a reviewable state. This is a quick check, not the review. Two independent conditions send the review into **gate mode** — an early exit that produces a comment-style note with NO `LGTM` / `NOT LGTM` verdict, because a verdict on a PR that cannot merge or does not build is noise, and it wastes the expensive analysis on code the author still has to change.
@@ -109,7 +138,7 @@ A check in a code-related bucket can still fail on its environment. Two cases le
 - **The diff provably cannot reach the failing step.** The step failed before anything the diff changes ran (a registry login refused before the first test), or the diff does not change what the step consumes (a values-only change whose rendered output is byte-identical). Propose one rerun as a maintainer action.
 - **The base is stale.** The branch is far behind its base and the failure matches what the base has since changed (an old controller rejecting a kind the base now ships). Propose a sync per [`references/maintainer-actions.md`](references/maintainer-actions.md).
 
-Without that evidence, the check gates as above.
+In both cases the review continues on the current head. The rerun or sync runs only in Step 9, so the fresh result is not known yet: an LGTM goes out as `COMMENT` naming the pending run, and the fresh run is judged on the next invocation (for a synced head, Step 1.4 decides how much to re-review). Without that evidence, the check gates as above.
 
 A failure log that points at a line the diff changed is a lead, not proof that the diff caused the failure. The gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES` only when the evidence establishes the mechanism: how the change produces the failure, naming the check and the line. Short of that, it stays a no-verdict `COMMENT` that names the unresolved check and the evidence still missing, and never presents the suspected cause as a confirmed defect. Every other gate case is a no-verdict `COMMENT` too.
 
@@ -129,7 +158,7 @@ Example note (gate form):
 
 Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE`, and `REQUEST_CHANGES` only when 1.5b established how the diff causes the failure. In default (draft) mode the note is simply reported to the user and the skill stops.
 
-If there are no conflicts and no code-related red CI, proceed to Step 1.6.
+If there are no conflicts and no code-related red CI, proceed to Step 1.6, or to Step 7 on the Step 1.4 short path.
 
 ## Step 1.6: Check Bot Comments
 
@@ -359,7 +388,7 @@ Real concerns worth surfacing but not blocking this merge:
 
 ## Step 7: Draft the Review with Verdict Gate
 
-**Gate mode (Step 1.5) skips this step entirely** — it produced no findings beyond the one an established-mechanism note carries and, outside that case of 1.5b, no verdict; its deliverable is the readiness note from Step 1.5c, presented in Step 8. Everything below applies only to a full review.
+**Gate mode (Step 1.5) skips this step entirely** — it produced no findings beyond the one an established-mechanism note carries and, outside that case of 1.5b, no verdict; its deliverable is the readiness note from Step 1.5c, presented in Step 8. Everything below applies to a full review and to the Step 1.4 short path.
 
 The review opens with a textual verdict line. The verdict text and the GitHub API event are two distinct layers:
 
