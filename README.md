@@ -75,6 +75,7 @@ The ten standalone agent plugins are gone. Nine of their agents ship inside **be
 
 | Plugin | Description |
 | --- | --- |
+| **ailine** | [ailine](https://github.com/lexfrei/ailine) — native status band above the prompt: model, context, quotas, cost, compactions, branch and worktree, refreshed while idle. Sourced from the ailine repository, no separate executable required |
 | **comment-hygiene** | SessionStart hook that injects code-comment discipline into every session — every comment must earn its place: say what the code cannot, never duplicate it; bans narration, changelog comments, reviewer asides, signature-restating docstrings, and leaky provenance |
 | **golangci-lint** | Auto-run golangci-lint on package when Go files are edited |
 | **macro-claude** | Session status hooks for the macro-claude macropad plugin — writes per-session JSON files that the Logi Plugin Service plugin reads to display live state on MX Creative Console keys |
