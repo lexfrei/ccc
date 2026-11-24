@@ -393,7 +393,7 @@ The PR MUST NOT merge with any of these present:
 - Resource leaks under normal operation (not just edge cases)
 - Behavior changes with stale documentation in the area being changed
 - Missing `--ticket` requirements when `--ticket` was provided
-- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.). One exception: its "no test" finding is re-judged by the tests gate above, since `/branch-review` asks for a test in the existing test surface without asking which layer owns the contract
+- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.)
 
 **Value/Design blockers (from Frames 1-3 and the design reading in Steps 1.7 and 2)** — the change should not merge in its current form for reasons independent of code correctness. Each still requires Step 5 evidence — a link to where the root cause lives, the specific spec/contract clause deviated from, a concretely-named (ideally demonstrated) cleaner alternative, or the evidence Frame 2a names for a constraint. Without that evidence it is a non-blocking design note, not a blocker.
 
