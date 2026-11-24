@@ -84,7 +84,7 @@ git fetch --quiet origin "$PRIOR_SHA" 2>/dev/null
 
 Every failure path ends in `full review`: an empty `PRIOR_SHA`, a base changed after the prior verdict, a prior head gone from the repository, a conflict the author resolved by hand (`merge-tree` exits 1), or any other content the base does not explain.
 
-When it prints `own diff unchanged`, skip Steps 1.6 to 6, Ticket Compliance included: run the readiness gate (Step 1.5) on the new head, then draft per Step 7. The body says the PR's diff is unchanged since the review at `PRIOR_SHA`, that the earlier verdict stands on that basis alone, and that a semantic conflict with the new base is left to the new head's CI. This path proves only that the diff did not change. It does not re-check anything the earlier round cleared, and the body must not present those clearances as re-verified.
+When it prints `own diff unchanged`, skip Steps 1.6 to 6, Ticket Compliance included: run the readiness gate (Step 1.5) on the new head, then draft per Step 7. One finding of that gate cancels the short path: a red check that Step 1.5b attributes to a rule the base added under the PR. The diff is the same, the rules it is judged by are not, so the review is full. The body says the PR's diff is unchanged since the review at `PRIOR_SHA`, that the earlier verdict stands on that basis alone, and that a semantic conflict with the new base is left to the new head's CI. This path proves only that the diff did not change. It does not re-check anything the earlier round cleared, and the body must not present those clearances as re-verified.
 
 ## Step 1.5: Readiness Gate (CI + Mergeability)
 
@@ -132,18 +132,20 @@ Split the failing checks into two buckets:
 
 The test is: "could this red check plausibly be caused by the diff?" If yes — or if you cannot tell — treat it as code-related and gate. Do not spend a full review proving a defect the CI already caught; hand it back.
 
-A check in a code-related bucket can still fail on its environment. Two cases leave the gate, each on evidence the log or the diff provides:
+A check in a code-related bucket can still fail on its environment. Two such cases leave the gate, each on evidence the log or the diff provides:
 
 - **The diff provably cannot reach the failing step.** The step failed before anything the diff changes ran (a registry login refused before the first test), or the diff does not change what the step consumes (a values-only change whose rendered output is byte-identical). Propose one rerun as a maintainer action.
 - **The base is stale.** The branch is far behind its base and the failure matches what the base has since changed (an old controller rejecting a kind the base now ships). Propose a sync per [`references/maintainer-actions.md`](references/maintainer-actions.md).
 
 In both cases the review continues on the current head. The rerun or sync runs only in Step 9, so the fresh result is not known yet: an LGTM goes out as `COMMENT` naming the pending run, and the fresh run is judged on the next invocation (for a synced head, Step 1.4 decides how much to re-review). Without that evidence, the check gates as above.
 
+**A rule the base added under the PR** is a third way out, with its own handling. It needs two pieces of evidence, and without both the check gates as above. First, the commit on `origin/$PR_BASE` that introduced the failing rule or tightened it, named by SHA: the change to the predicate itself, which can sit away from the line the log points at (a removed exception, a new input). Second, that this commit is not one of the PR's own and reached the base after the lines it rejects were already in the PR: an earlier green run of the same check on a head that already contained the lines the rule rejects, or a base that lacked the rule when the offending lines were pushed. How the commit is found is the reviewer's call (history of the file, blame, the merged PR that carried it); dates of files and of original commits prove nothing by themselves, and neither does the merge base, which a sync moves past the rule. Merge order does not settle who is wrong, since two changes that each pass alone and fail together are a property of the pair. Do not gate and do not take the Step 1.4 short path: run the full review, and in Step 3 put that rule through the six questions of Frame 2a. If the rule is right and the PR breaks the real invariant, that is an ordinary finding against the diff. If the PR is a legitimate user of the real invariant and the rule is stricter than it, the defect is in the rule: it is no finding against the PR and the author is not asked to change anything for it. The draft then carries the fix for the base as a tracking issue (Step 8), and while the red check is required, an LGTM goes out as `COMMENT` naming that issue.
+
 A failure log that points at a line the diff changed is a lead, not proof that the diff caused the failure. The gate note carries `NOT LGTM` and publishes as `REQUEST_CHANGES` only when the evidence establishes the mechanism: how the change produces the failure, naming the check and the line. Short of that, it stays a no-verdict `COMMENT` that names the unresolved check and the evidence still missing, and never presents the suspected cause as a confirmed defect. Every other gate case is a no-verdict `COMMENT` too.
 
 ### 1.5c. Gate-mode output
 
-When 1.5a or 1.5b fires, STOP before Step 2 — do NOT run `/branch-review`, Codex, or Claude's analysis. This also skips Ticket Compliance (the `--ticket` pass): no code was reviewed against requirements, so the note makes no compliance claim. Produce a comment-style note with no verdict word, covering:
+When 1.5a or 1.5b fires, STOP before Step 1.6 (a red check that left the gate under 1.5b does not fire it) — do NOT run `/branch-review`, Codex, or Claude's analysis. This also skips Ticket Compliance (the `--ticket` pass): no code was reviewed against requirements, so the note makes no compliance claim. Produce a comment-style note with no verdict word, covering:
 
 - What blocks readiness: the conflict and/or the specific failing checks, named. For a red check whose cause is not established, the evidence still missing.
 - The concrete ask: rebase/resolve conflicts, fix the named checks, then re-request review.
@@ -157,9 +159,11 @@ Example note (gate form):
 
 Then hand off to the normal presentation and publish machinery, in gate form: present the note per Step 8, and if (and only if) `--publish` was passed AND the user approved, post it per Step 9 as a `COMMENT`-event review — never `APPROVE`, and `REQUEST_CHANGES` only when 1.5b established how the diff causes the failure. In default (draft) mode the note is simply reported to the user and the skill stops.
 
-If there are no conflicts and no code-related red CI, proceed to Step 1.6, or to Step 7 on the Step 1.4 short path.
+If there are no conflicts and no code-related red CI, or every red check left the gate, proceed to Step 1.6, or to Step 7 on the Step 1.4 short path (never the short path for a rule the base added under the PR).
 
-## Step 1.6: Check Bot Comments
+## Step 1.6: Own View, Then Bot Comments
+
+**Form your own view before the author's.** Before the bot comments, with only the file list and the commit titles from Step 1 on screen, read the diff (`git diff "origin/$PR_BASE...$PR_HEAD_SHA"`, the head pinned in Step 1) and write down three things: what problem this change appears to solve, what else could solve it, and what it obliges future changes to do. Do it first: bot summaries, full commit messages and the PR body (Steps 1.6, 1.7 and 2) all carry the author's framing, and a reviewer who reads that first checks the frame and rarely questions it, so a PR whose every claim is true passes untouched. Keep the note; Step 3 compares it with what the author says.
 
 Read all comments and inline review comments from bots (CodeRabbit, Gemini Code Assist, etc.):
 
@@ -169,6 +173,8 @@ gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user
 ```
 
 Note which bot findings are valid and which are noise. Check if the author has responded to bot comments. If valid bot findings remain unaddressed, either incorporate them into the review (with new evidence — never repeat verbatim) or surface a general note asking the author to address them.
+
+A bot suggestion the author applied is part of the diff, not a closed thread. Bots optimize a check for completeness, which pushes it past the real invariant, and the thread then reads as resolved. When an applied suggestion adds or tightens an enforceable constraint, Frame 2a applies to the tightening.
 
 ## Step 1.7: Contribution Contract and Provenance
 
@@ -182,6 +188,8 @@ gh pr view $PR_NUMBER --json body --jq .body
 
 Read every file that applies to the changed paths (`CONTRIBUTING.md`, `AGENTS.md`, the PR template) and the review, testing, compatibility, and AI-use policies they link to. Note what they require of commit messages, sign-off, AI use and its disclosure, tests, and compatibility. The user's explicit instructions for this review count as contract too. Testing and compatibility clauses also feed the tests and no-regression gates in Step 6.
 
+Read the project's stated design principles as well: a principles section in `AGENTS.md`, an architecture document, a reviewing guide. A reviewer starting from a blank context cannot infer them from the code, and a change that contradicts one is a Value/Design blocker (Step 6) that quotes it.
+
 Then hold the commits and the PR body to that contract:
 
 - **A clause the PR violates** is a verdict finding (Step 6, Contract blockers) that quotes the offending line and the clause as its Evidence: a commit format the guide mandates, a missing `Signed-off-by` under a DCO, a disclosure trailer the AI policy requires or forbids.
@@ -192,12 +200,13 @@ An empty commit without `Signed-off-by` that GitHub inserted while merging a sta
 
 ## Step 2: Business Context
 
-Before any code reading, frame WHY this PR exists. Read in this order:
+Frame WHY this PR exists. Read in this order:
 
 1. PR title and full body
 2. Linked issues (`closingIssuesReferences` in `gh pr view`) and their acceptance criteria
-3. Existing reviews and their findings (do not repeat already-raised points)
-4. If `--ticket` provided, fetch ticket content:
+3. Every design document the PR, its linked issues or its commits reference (a design proposal, an ADR, an RFC), at its current revision: goals, non-goals, testing plan, and notes on the changed area. `closingIssuesReferences` misses these: a PR that implements one phase of a design cites it with a plain reference, often into another repository, so read the body and the commit messages for links. When the PR cites no design, search the project's design record for the components it touches. A design is input, not authority: a clause it states (a test plan, a mechanism) goes through the same frames as the diff, and an accepted design does not make a mechanism right. Where the design left a decision to the implementation (the shape of an API, a storage format), the PR that makes it is the design review of that decision: evaluate it as a design, not only as code that matches a plan
+4. Existing reviews and their findings (do not repeat already-raised points)
+5. If `--ticket` provided, fetch ticket content:
    - URL starting with `http`: `gh issue view <number> --repo <owner/repo>` for GitHub URLs, `WebFetch` for external URLs (Jira, Linear, Notion)
    - GitHub shorthand (`#123`): `gh issue view 123` in the current repo
    - Other ID: ask the user for the full URL
@@ -212,11 +221,30 @@ If `--ticket` was provided, also extract:
 
 ## Step 3: Five-Frame Substance Pass
 
+A review answers two different questions, and each needs its own answer. **Verification**: are the author's claims true, and does the code do what it says? **Evaluation**: is this the right problem, solved by the right mechanism at the right layer, and what does it cost future changes? "No code findings" closes verification only. Frames 1-3 are the evaluation, and it is not done until it names at least one alternative that was considered and why it lost, starting from the note made at the start of Step 1.6, before the description was read. For a trivial change the alternative can be one clause ("leaving it as is keeps the typo"), but it is written down.
+
 Sequentially answer the five questions, taking notes. Frames 1-3 are a maintainer's gate on whether the change SHOULD exist at all — any one of them can independently produce a `NOT LGTM` via the Value/Design blocker category in Step 6, even when the code is correct, tested, and well-written. Do NOT collapse them into "the code works, so it's fine": a flawless PR can still not belong in this repository. Frame 5 delegates code quality to Step 4. The output of this step is a list of preliminary concerns to verify in Step 5 — value/design concerns carry the SAME evidence bar as code findings (a link to where the root cause lives, the deviated spec/contract clause, a concretely-named cleaner alternative), they are not free-form opinion.
 
 **Frame 1 — Is the problem real, and is THIS repo the right place to fix it?** Two parts. (a) Verify the symptom against current code/docs/running behavior, not just the PR description — trace "X causes Y"; if you cannot reproduce the claim from reading the code, that is a finding. (b) Locate the ROOT CAUSE. If the real cause lives upstream, in a dependency, in a consumer's misconfiguration, or in a spec/contract this repo correctly implements, then a fix HERE is a workaround for someone else's bug. Working around an external bug by baking a permanent deviation (from a spec, an API contract, an invariant) into this repo is a Value/Design blocker, not a feature — the fix belongs where the cause is. Name where the root cause actually lives, with evidence (the upstream issue, the spec clause, the misconfigured consumer).
 
 **Frame 2 — Right approach, right layer, worth its permanent cost?** Enumerate 2-3 realistic alternatives (different abstraction layer, different tool, config-only, fix-it-upstream, compose existing components, or do nothing) and say why each is rejected or accepted. Then weigh **value against maintenance cost explicitly**: value = what this gives and to how many users (a broad need vs a niche or single-consumer case); cost = this code is maintained FOREVER — new surface area, new failure modes, new docs to keep in sync, new invariants constraining future changes, added security/attack surface, and any spec/contract deviation every future maintainer inherits. If a cleaner solution exists that needs less code or no code in this repo (a config pattern, an upstream fix, composing existing pieces), the heavier in-repo approach is a Value/Design blocker even when it works — "it works and has tests" does not justify taking on permanent cost. To block on this, name the cleaner alternative concretely and, ideally, show it works; a bare "not worth it" without a demonstrated alternative is speculation — downgrade it to a non-blocking design note. If you cannot list alternatives or articulate the value/cost balance, the substance work is not done.
+
+**Frame 2a — Does the change legislate?** List every constraint the diff makes enforceable on future changes: a test that asserts a property of the whole tree, a lint, a validator, a schema restriction, a CI gate. For each one, write the predicate in one sentence ("this forbids X") and answer six questions:
+
+- **Source**: which requirement of the system does it protect — a spec clause, a runtime contract, a documented decision, a reproduced defect? The author's convenience and "this is how the tree looks today" are not sources: a check that encodes an incidental property turns it into a contract nobody decided on.
+- **Truth**: does the predicate hold for every legitimate state of the system? Compare what the check reads with what the system actually consumes (raw files against rendered output, structure against behavior), then look for a legitimate counterexample in the base branch and in open PRs that touch the same paths (the search box matches titles and bodies, not changed files, so filter on files with the command at the end of this frame). One counterexample disproves the invariant.
+- **Cost of a false positive**: a check that fails the build has to be right essentially every time; one that cannot get there belongs in a warning or an opt-in mode. This question alone does not block: a check that is right but noisy is a design note asking for that mode, and one that is wrong on a legitimate state is the Truth case.
+- **Consumer**: what reads each new artifact today (a declaration, a schema field, a config key)? Name the code. "Nothing reads it yet" means the PR fixes the shape of something whose requirements are not known, and a test over it enforces a guess.
+- **Mechanism**: is this the layer that owns the contract? A contract the API must hold belongs in the schema or admission, a property of rendered output in a test of the rendering, a style rule in a linter. A unit test that reaches outside its package to parse another component's source (templates by regexp, config files by glob) couples the two and enforces the contract only for whoever runs that test.
+- **Object**: does the check assert the invariant, or a snapshot of today's values? Expected results typed in by the author next to the code that computes them, a pinned count, or a pinned layout detect change, not defects, and when the checked artifact restates logic that lives elsewhere, the comparison has to be against that other source, or the drift the check exists for goes unseen.
+
+A constraint the diff adds that has no source, one stricter than the invariant it claims to protect, one enforced at the wrong layer, one guarding an artifact nothing consumes, or one that pins values instead of the invariant is a Value/Design blocker even when its code is correct and tested. The evidence follows the case, in the same order: the search that found no requirement behind it, the real invariant with a legitimate counterexample, the layer that owns the contract, the search that found no consumer, or the pinned literal next to the code that computes it. Reading only the check's implementation is not a review of the rule. When the diff adds no enforceable constraint and no base rule from Step 1.5b is under review, say so in one line and move on: this frame and its pre-mortem apply only in those two cases. Otherwise close the frame with one pre-mortem line: "if this is reverted in six months, it will be because …", with a reason that is not a bug in the code.
+
+```bash
+gh pr list --state open --limit 1000 --json number,changedFiles,files --jq '.[] | select(.changedFiles > (.files | length) or any(.files[]; .path | startswith("<dir>"))) | .number'
+```
+
+The file list of one PR is cut at 100 entries, so the command also prints every PR whose list came back short: check those through `gh api --paginate "repos/{owner}/{repo}/pulls/<N>/files"`. Raise the limit when the repository has more open PRs than that.
 
 **Frame 3 — Tradeoffs acknowledged, and is the scope minimal?** Two parts. (a) Tradeoffs: storage cost, performance, security, operational burden, lock-in, default-vs-recommended mismatch, migration cost — the PR (description, README, comments) should name the tradeoffs it accepts; if it doesn't, raise them. (b) Scope: is this the minimal honest change for the stated problem, or does it over-reach? A PR that also ships convenience layers, behavior that sounds authoritative but cannot be truly guaranteed, or "while I'm here" additions beyond the core need has a scope ceiling — identify the minimal acceptable subset and flag the rest as over-reach.
 
@@ -285,7 +313,7 @@ Examine for:
 - **Error handling**: swallowed errors, missing cleanup in error paths, panic/throw in library code, error wrapping losing context
 - **Resource leaks**: unclosed files/connections/channels, missing defer/finally, context cancellation not propagated
 - **Naming and abstractions**: misleading names, wrong abstraction level, leaky abstractions, god functions
-- **API contracts**: breaking changes to public interfaces, missing input validation, undocumented behavior changes
+- **API contracts**: breaking changes to public interfaces, missing input validation, undocumented behavior changes. A field whose value is code (CEL, a regexp, a template, an expression language) defines a language: name where its specification lives, who owns it, and how its semantics may change, because a change to the evaluator changes every producer's meaning with no schema diff. An optional field that a stated later phase makes mandatory is a breaking change for every producer that lacks it: surface it now as an action item, and as a broken API contract (Step 6) on the change that starts enforcing it. A schema-diff gate passing is not evidence either way
 - **Regressions**: behavior that worked before this change and is now altered or removed — check ALL config variants, defaults, and flags, not just the common path. A narrow blast radius is not a reason to skip this; a path used by few is still a path that worked
 - **Security**: injection (SQL, command, template), auth bypass, secrets in code, unsafe deserialization, path traversal
 - **Data integrity**: missing transactions, partial writes, inconsistent state on failure, TOCTOU races
@@ -311,6 +339,10 @@ For each finding:
 3. **Check for mitigations**: search the codebase for existing guards, fallbacks, or design decisions that intentionally address the concern. Read related files, configs, dependencies.
 4. **Prove, don't speculate**: each finding must include concrete evidence — file paths, line numbers, code snippets, or external documentation references.
 5. **Disprove if wrong**: if investigation shows a finding is invalid, log it as DISPROVEN with the reason — these will be shown to the user in Step 8 so the dismissal can be cross-checked.
+
+### 5a-bis. Tests are code under review, not evidence
+
+A test added or changed in this PR is never evidence for the PR's own main risk until its oracle has been reviewed. For each expected value in a new test, answer where it comes from: a specification (link it), another implementation run on the same input, or the author's head. When the test exists to show that two implementations agree (a declaration that restates logic from a template, a port, a cache), it has to compare them with each other on shared inputs; a table of literals typed next to the code that computes them is a third implementation and detects change, not defects. Then name three plausible legitimate changes to the area that keep the invariant the test protects (a new valid entry, a reorder, a behavior-preserving refactor) and check whether the test fails on any of them. One that does is asserting today's values, not the invariant: a finding under Frame 2a (Object). "The new test is green" appears in the review only after this, and never as the sole support for a clearance.
 
 ### 5b. Per-finding verdict
 
@@ -355,19 +387,21 @@ The PR MUST NOT merge with any of these present:
 - Data loss or corruption risks
 - Broken API contracts (existing consumers will break)
 - Broken variants/environments (works in variant A but breaks variant B)
-- **Tests gate** — the changed area already has tests, but new or changed code ships without tests, or with happy-path-only tests that never exercise rejected/invalid/boundary behavior. Tests in a tested area must define the full contract — what is allowed AND what is rejected — so they read as executable documentation. Shallow or absent tests where a test convention already exists = NOT LGTM, never an action item.
+- **Tests gate** — the changed area already has tests, but new or changed behavior ships uncovered, or with happy-path-only tests that never exercise rejected/invalid/boundary behavior. Coverage counts at the layer that owns the contract: unit tests for code in the package under test, rendered-output tests for templates, schema or admission rules for an API, e2e for a contract between running components. Tests there define the full contract, what is allowed AND what is rejected, so they read as executable documentation. Shallow or absent tests where a test convention already exists = NOT LGTM, never an action item. When that layer cannot exercise the change in this PR (nothing consumes the artifact yet, or the repository has no test surface at that layer), the missing test does not fail the gate: the draft names where the check belongs and carries it as a non-blocking follow-up for the maintainer to accept or refuse. A test at another layer does not satisfy the gate, and is never requested, when it restates by hand the values another component computes or reads that component's source by glob, regexp or raw parsing (Frame 2a, Step 5a-bis).
 - **No-regression gate** — any behavior that worked before this PR and no longer works, across every config variant, default, and flag, not just the common path. "Affects few users", "edge case", "rare config", "deprecated anyway" are NOT valid reasons to accept a regression. The only non-blocking path is an intentional breaking change the PR explicitly declares with a migration note — and even then it is surfaced in the verdict, never passed silently.
 - Missing error handling that causes silent failures
 - Resource leaks under normal operation (not just edge cases)
 - Behavior changes with stale documentation in the area being changed
 - Missing `--ticket` requirements when `--ticket` was provided
-- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.)
+- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.). One exception: its "no test" finding is re-judged by the tests gate above, since `/branch-review` asks for a test in the existing test surface without asking which layer owns the contract
 
-**Value/Design blockers (from Frames 1-3)** — the change should not merge in its current form for reasons independent of code correctness. Each still requires Step 5 evidence — a link to where the root cause lives, the specific spec/contract clause deviated from, or a concretely-named (ideally demonstrated) cleaner alternative. Without that evidence it is a non-blocking design note, not a blocker.
+**Value/Design blockers (from Frames 1-3 and the design reading in Steps 1.7 and 2)** — the change should not merge in its current form for reasons independent of code correctness. Each still requires Step 5 evidence — a link to where the root cause lives, the specific spec/contract clause deviated from, a concretely-named (ideally demonstrated) cleaner alternative, or the evidence Frame 2a names for a constraint. Without that evidence it is a non-blocking design note, not a blocker.
 
 - Root cause lives upstream / outside this repo and the PR works around it by baking a permanent deviation (spec, contract, invariant) into this codebase.
 - Permanent maintenance cost disproportionate to value — niche or single-consumer benefit versus forever-maintained surface area — when a cleaner solution (a config pattern, an upstream fix, composing existing components, or doing nothing) exists.
 - Wrong layer / wrong abstraction: the change solves the problem where it misrepresents state or violates the component's contract (e.g. synthesizing a success response the component cannot actually guarantee).
+- An enforceable constraint the diff adds (repo-wide test, lint, validator, CI gate) with no named source, stricter than the invariant it claims to protect, enforced at a layer that does not own the contract, guarding an artifact nothing consumes, or pinning today's values in place of the invariant (Frame 2a); the verdict carries the evidence Frame 2a names for that case and says where the constraint should be enforced instead.
+- A contradiction with a design principle the project states (Step 1.7), or with a clause of the design the PR implements that holds up under the frames (Step 2); the verdict quotes the principle or the clause.
 - Scope over-reach: the PR ships materially more than the minimal honest change the problem requires; the verdict names the minimal acceptable subset and blocks the rest.
 
 **Contract blockers (from Step 1.7)** — a commit, the PR body, or the change violates a clause of the project's published contract or of the user's explicit instructions for this review. Each quotes the offending line and the clause as Evidence. A requirement neither source states is at most a non-blocking comment, and style alone never establishes AI authorship.
@@ -447,11 +481,12 @@ Style rules:
 Present:
 
 1. Textual verdict (LGTM / NOT LGTM) and the API event (APPROVE / COMMENT / REQUEST_CHANGES) the published version would carry, chosen per the Step 7 table — both, so the user sees the body opener and the GitHub UI label. For an LGTM posted as COMMENT, name the blocking merge condition.
-2. Full review body
-3. Each inline comment with file path and line number
-4. List of DISPROVEN findings (so the user can verify dismissals)
-5. Drafts of any tracking issues (title + body) that publish-mode would file in Step 9 — title, target repo, and full body
-6. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals, a rerun of an environment failure
+2. The evaluation: the alternative considered and why it lost; for a diff that adds enforceable constraints, or a base rule examined per Step 1.5b, each constraint with its source and consumer and the pre-mortem line (Frame 2a); for new or changed tests, where the expected values come from (Step 5a-bis). An empty evaluation means the review is not finished, whatever the verification found. The short path of Step 1.4 carries no evaluation by design and skips this item.
+3. Full review body
+4. Each inline comment with file path and line number
+5. List of DISPROVEN findings (so the user can verify dismissals)
+6. Drafts of any tracking issues (title + body) that publish-mode would file in Step 9 — title, target repo, and full body
+7. Maintainer actions Step 9 would perform per [`references/maintainer-actions.md`](references/maintainer-actions.md): a branch sync, fork-run approvals, a rerun of an environment failure
 
 **Gate mode (Step 1.5):** present only the readiness note and the concrete ask — there are no inline comments, DISPROVEN list, or tracking issues, and no findings beyond the one an established-mechanism note carries, because no code review was performed. The approval gate below still applies before any `--publish`.
 
@@ -463,13 +498,13 @@ If `--publish` **was** passed: this output is now an approval gate. Wait for exp
 
 **Gate mode (Step 1.5):** skip 9a (no tracking issues). POST a new `COMMENT`-event review carrying the readiness note — no inline comments, no verdict word. 9b's lingering-verdict check still applies (a prior `APPROVED` or `CHANGES_REQUESTED` survives this comment). A 1.5b failure whose mechanism in the diff is established posts `REQUEST_CHANGES` instead, its note opening with `NOT LGTM`.
 
-Approved maintainer actions (Step 8 item 6) run first, per [`references/maintainer-actions.md`](references/maintainer-actions.md).
+Approved maintainer actions (the last item of the Step 8 draft) run first, per [`references/maintainer-actions.md`](references/maintainer-actions.md).
 
 ### 9a. File tracking issues (if any were prepared in Step 3)
 
 Payloads go through a file, never stdin: a hook that inspects outgoing text reads the file named by `--input`, and refuses a call whose body it cannot see. Write each payload with `json.dump` (shell escaping of complex bodies is unreliable) into `$PR_TMP`, then post it in a separate command.
 
-For each approved tracking issue:
+For each approved tracking issue, in the repository that owns the fix (the docs repository for a documentation gap, the base repository for a rule from Step 1.5b):
 
 ```python
 import json
@@ -480,7 +515,7 @@ with open(payload, "w") as f:
 ```
 
 ```bash
-gh api "repos/<owner>/<docs-repo>/issues" --method POST --input "$PR_TMP/issue-1.json" --jq .html_url
+gh api "repos/<owner>/<target-repo>/issues" --method POST --input "$PR_TMP/issue-1.json" --jq .html_url
 ```
 
 Capture each URL and splice it into the review body under the relevant non-blocking follow-up.
@@ -537,12 +572,13 @@ After publishing, print the review URL so the user can verify it rendered correc
 ## Important Rules
 
 - **Publish is opt-in**: nothing is sent to GitHub unless the invocation included `--publish` AND the user approved the draft in Step 8. The default mode is local draft only.
-- **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, no `LGTM` / `NOT LGTM` verdict unless the diff's mechanism for a red check is established, and NO dual analysis. A red check becomes `NOT LGTM` / `REQUEST_CHANGES` only when the evidence shows how the diff causes it; a log pointing at a changed line is a lead, and without the mechanism the note names the unresolved check and the missing evidence. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate.
-- **Value/Design gate is a real verdict**: Frames 1-3 can produce `NOT LGTM` on their own — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, or scope over-reach — even when the code is correct and tested. These blockers carry the same evidence bar as code findings (where the root cause lives, the deviated spec/contract clause, a concretely-named cleaner alternative); without evidence they are non-blocking design notes.
+- **Readiness gate first**: before any substance or code analysis, check mergeability and CI (Step 1.5). Merge conflicts (DIRTY) or red CI plausibly caused by the diff → gate mode: a `COMMENT` note asking the author to fix conflicts / CI, no `LGTM` / `NOT LGTM` verdict unless the diff's mechanism for a red check is established, and NO dual analysis. A red check becomes `NOT LGTM` / `REQUEST_CHANGES` only when the evidence shows how the diff causes it; a log pointing at a changed line is a lead, and without the mechanism the note names the unresolved check and the missing evidence. Red CI that clearly cannot be caused by the diff (missing fork secrets, flaky external service) does not gate, and neither does a check that left the gate under Step 1.5b.
+- **Verification is not evaluation**: checking that the author's claims are true does not decide whether the change should exist in this form. Read the diff before the description, name a rejected alternative, and never cite a test from the same PR as evidence before its oracle is reviewed.
+- **Value/Design gate is a real verdict**: Frames 1-3 and the design reading in Steps 1.7 and 2 can produce `NOT LGTM` on their own — root cause upstream, permanent maintenance cost disproportionate to niche value, wrong layer, a constraint that fails Frame 2a, a contradiction with a stated principle or design clause, or scope over-reach — even when the code is correct and tested. These blockers carry the same evidence bar as code findings (where the root cause lives, the deviated spec/contract clause, a concretely-named cleaner alternative, or the evidence Frame 2a names for a constraint); without evidence they are non-blocking design notes.
 - **Verdict mandatory**: every review opens with `LGTM` or `NOT LGTM` as the first word of the body. The no-verdict paths are gate mode (Step 1.5, except a red check whose mechanism in the diff is established) and a review that cannot reach a final verdict; both post a `COMMENT` that says what is missing.
 - **APPROVE means mergeable now**: every required check green on the exact head, GitHub's merge state clean, and no independent prerequisite open; a real stack's child waiting only for its parent is the one exception. A clean LGTM that cannot merge yet posts as `COMMENT` naming what it waits for — never approve-with-hold. Red CI the diff causes is `REQUEST_CHANGES`.
-- **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious, but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
-- **Tests gate (mandatory)**: in any area that already has tests, changed or new code ships with tests, and those tests must cover the full contract — valid use AND rejected/invalid use — not just the happy path. Shallow or absent tests in a tested area = NOT LGTM. (An area with no existing tests gets a recommendation, not a block.)
+- **Five-frame substance pass is mandatory**, even on small PRs. A trivial PR collapses Frames 1-3 to the obvious (Frame 2a still applies whenever the diff adds a check that can fail other changes, however small the diff), but Frame 4 (docs sync) and Frame 5 (dual-model code-quality) still apply.
+- **Tests gate (mandatory)**: in any area that already has tests, changed or new code ships with tests, and those tests must cover the full contract — valid use AND rejected/invalid use — not just the happy path, at the layer that owns the contract. Shallow or absent tests in a tested area = NOT LGTM. A test at another layer that restates by hand the values another component computes, or parses that component's source, does not satisfy the gate and is never requested. When the owning layer cannot exercise the change in this PR, the missing test is a non-blocking follow-up, not a block. (An area with no existing tests gets a recommendation, not a block.)
 - **No-regression gate (mandatory)**: what worked must keep working. A small blast radius is never a license to break it — "few users", "edge case", "rare config" are not acceptable justifications. Only an explicitly declared, migration-documented breaking change may pass, and it is surfaced in the verdict, never silent.
 - **No speculation**: every finding must have an `**Evidence**:` line. Without evidence, drop.
 - **Contract, not reviewer taste**: process, style, and provenance requirements (commit format, sign-off, AI use and disclosure) block only on a clause of the project's published contract, read at the base branch, or on the user's explicit instructions; the violated clause is quoted as Evidence. Style tells justify a clarity comment and never prove AI authorship.
