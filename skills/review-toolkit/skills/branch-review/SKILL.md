@@ -143,8 +143,8 @@ Review the diff for:
 - Error handling gaps
 - Code clarity and maintainability
 - Naming and structure
-- Test coverage: if the area being changed already has tests, new or changed code MUST come with tests, and those tests must define the full contract — valid use AND rejected/invalid use (error paths, boundaries, invalid inputs) — so they read as executable documentation of what is allowed and what is not. Happy-path-only tests in a tested area do not satisfy this and block (NOT LGTM). If the area has no tests at all, recommend adding them but do not block on that alone
-- Where a code defect is found: suggest a specific test in the existing test surface that would demonstrate the problem (e.g. "a test that calls X with empty input would expose this nil pointer")
+- Test coverage: if the area being changed already has tests, new or changed code MUST come with tests, and those tests must define the full contract — valid use AND rejected/invalid use (error paths, boundaries, invalid inputs) — so they read as executable documentation of what is allowed and what is not. Happy-path-only tests in a tested area do not satisfy this and block (NOT LGTM). Coverage counts at the layer that owns the contract: unit tests for code in the package under test, rendered-output tests for templates, schema or admission rules for an API, e2e for a contract between running components. When that layer cannot exercise the change in this branch (nothing consumes the artifact yet, or the repository has no test surface at that layer), the missing test does not block: recommend it and name where the check belongs. A test at another layer that restates by hand the values another component computes, or reads that component's source by glob, regexp or raw parsing, does not satisfy this criterion and is never requested. If the area has no tests at all, recommend adding them but do not block on that alone
+- Where a code defect is found: suggest a specific test in the existing test surface, at the layer that owns the contract, that would demonstrate the problem (e.g. "a test that calls X with empty input would expose this nil pointer")
 - Adjacent issues: if you find a problem, look at the surrounding code in the same area — related issues nearby are worth surfacing (not a full codebase audit, just the vicinity of the changes). Report everything you find; attribution (below) decides which section each finding lands in
 - A recommendation that names a helper, API, or library call is not a recommendation until the reviewer has read that symbol's definition and the finding quotes its semantics. A name alone is a guess dressed as advice: `ethtool_validate_speed()` sounded like a drop-in for a speed check and by definition accepts the one value the check rejects. If the definition does not fit, say why in one line instead of proposing it
 - Comments say WHY, never WHAT: a comment that narrates the next line, restates a signature, banners a section, or logs a change the code already shows is a verdict finding (NOT LGTM) — the reader pays for every sentence and gets nothing the code did not already give. A comment earns its place only with what the code cannot say: the reason for this way over the obvious one, a constraint or unit the types do not carry, an external anchor, a trap
@@ -184,7 +184,7 @@ The PR owns what it changed and what its changes interact with — nothing more.
 
 The remedy lives in the same layer as the defect:
 
-- **Changed logic in code**: a test in the **existing** test surface, per the test-coverage criterion above. Absent test blocks.
+- **Changed logic in code**: a test in the **existing** test surface, per the test-coverage criterion above. Absent test blocks, except where that criterion makes it a recommendation.
 - **Fixed wording in docs or comments**: the fix is the deliverable. No test demanded.
 - **Never propose a new checker, linter rule, CI job, or guard script as the required remedy for a finding.** If the existing test surface cannot express the check, "not machine-checkable here" is a complete answer. A new guard may be suggested only in "Found outside this diff" as its own future work — never as a condition for this PR's verdict.
 
@@ -252,7 +252,7 @@ Open with the review header, in this order:
 
 Verdict semantics:
 
-- **NOT LGTM** — at least one verdict finding is open: a defect the diff introduced, worsened, or interacts with (bugs, logic errors, security issues, regressions, error-handling gaps, comments-as-fixes, docs the diff made wrong), missing tests for changed logic in a tested area, or missing `--ticket` requirements when `--ticket` was provided.
+- **NOT LGTM** — at least one verdict finding is open: a defect the diff introduced, worsened, or interacts with (bugs, logic errors, security issues, regressions, error-handling gaps, comments-as-fixes, docs the diff made wrong), missing tests for changed logic in a tested area at the layer that owns the contract, or missing `--ticket` requirements when `--ticket` was provided.
 - **LGTM** — no open verdict findings. **LGTM is compatible with a non-empty "Recommended" list** (naming, style, minor improvements, suggestions) and with a non-empty "Found outside this diff" section. When every finding is either recommended or outside the diff, the verdict is LGTM.
 
 Then two sections, same quality bar, same evidence discipline:

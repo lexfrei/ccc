@@ -49,8 +49,8 @@ echo "PR_TMP=$PR_TMP PR_WORKTREE=$PR_WORKTREE PR_IS_FORK=$PR_IS_FORK"
 
 # Verify PR scope via API — do NOT trust local git diff for file count
 gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER" --jq '{commits: .commits, changed_files: .changed_files}'
-gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/files" --jq '.[].filename'
-gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/commits" --jq '.[] | "\(.sha[:8]) \(.commit.message | split("\n")[0])"'
+gh api --paginate "repos/{owner}/{repo}/pulls/$PR_NUMBER/files" --jq '.[].filename'
+gh api --paginate "repos/{owner}/{repo}/pulls/$PR_NUMBER/commits" --jq '.[] | "\(.sha[:8]) \(.commit.message | split("\n")[0])"'
 ```
 
 Print the current commit hash, commit count, file count, and file list so the user can confirm this is the right state. If the local `git diff origin/$PR_BASE...$PR_HEAD_SHA --stat` shows different files than the API, **trust the API** and investigate the local discrepancy before proceeding.
@@ -102,7 +102,7 @@ gh pr view $PR_NUMBER --json statusCheckRollup \
 gh pr checks $PR_NUMBER --required --json name,bucket
 
 # Runs on this exact head that wait for a maintainer's approval
-gh api "repos/{owner}/{repo}/actions/runs?head_sha=$PR_HEAD_SHA&status=action_required" --jq '.workflow_runs[] | {id, name}'
+gh api --paginate "repos/{owner}/{repo}/actions/runs?head_sha=$PR_HEAD_SHA&status=action_required" --jq '.workflow_runs[] | {id, name}'
 ```
 
 List every `action_required` run in the draft. A new head, including one that only merged the base, starts its runs over, and they wait for approval again.
@@ -169,7 +169,7 @@ Read all comments and inline review comments from bots (CodeRabbit, Gemini Code 
 
 ```bash
 gh pr view $PR_NUMBER --json comments --jq '.comments[] | select(.author.is_bot == true or (.author.login | test("bot|coderabbit|gemini"; "i"))) | {author: .author.login, body: .body}'
-gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user.login | test("bot|coderabbit|gemini"; "i")) | {author: .user.login, path: .path, line: (.original_line // .line), body: .body}'
+gh api --paginate "repos/{owner}/{repo}/pulls/$PR_NUMBER/comments" --jq '.[] | select(.user.login | test("bot|coderabbit|gemini"; "i")) | {author: .user.login, path: .path, line: (.original_line // .line), body: .body}'
 ```
 
 Note which bot findings are valid and which are noise. Check if the author has responded to bot comments. If valid bot findings remain unaddressed, either incorporate them into the review (with new evidence — never repeat verbatim) or surface a general note asking the author to address them.
@@ -182,7 +182,7 @@ Process, style, and provenance requirements come from the project, not from the 
 
 ```bash
 git ls-tree -r --name-only "origin/$PR_BASE" | grep -iE '(^|/)(contributing|agents|claude)[^/]*\.(md|rst|adoc|txt)$|copilot-instructions|pull_request_template'
-gh api "repos/{owner}/{repo}/pulls/$PR_NUMBER/commits" --jq '.[] | "--- \(.sha[:8]) <\(.commit.author.email)>\n\(.commit.message)"'
+gh api --paginate "repos/{owner}/{repo}/pulls/$PR_NUMBER/commits" --jq '.[] | "--- \(.sha[:8]) <\(.commit.author.email)>\n\(.commit.message)"'
 gh pr view $PR_NUMBER --json body --jq .body
 ```
 
@@ -393,7 +393,7 @@ The PR MUST NOT merge with any of these present:
 - Resource leaks under normal operation (not just edge cases)
 - Behavior changes with stale documentation in the area being changed
 - Missing `--ticket` requirements when `--ticket` was provided
-- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.). One exception: its "no test" finding is re-judged by the tests gate above, since `/branch-review` asks for a test in the existing test surface without asking which layer owns the contract
+- Findings the cascaded `/branch-review` raised as verdict findings (merge-base attribution, comments-as-fixes, docs the diff made wrong, etc.)
 
 **Value/Design blockers (from Frames 1-3 and the design reading in Steps 1.7 and 2)** — the change should not merge in its current form for reasons independent of code correctness. Each still requires Step 5 evidence — a link to where the root cause lives, the specific spec/contract clause deviated from, a concretely-named (ideally demonstrated) cleaner alternative, or the evidence Frame 2a names for a constraint. Without that evidence it is a non-blocking design note, not a blocker.
 
