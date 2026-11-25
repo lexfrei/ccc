@@ -8,7 +8,7 @@ agent: general-purpose
 
 **Important**: If the current directory is not a git repository, ask the user where the target repository is located before proceeding.
 
-**CRITICAL**: Do not switch branches in the user's repo. If the active branch is the one to review, analyze it in place using `git diff`, `git log`, `git show`. If the active branch is NOT the target (for example when this skill is cascaded from `/pr-review` and the active branch is `master`/`main` while the target is a feature branch), create a temporary git worktree pinned to the target branch and run all analysis there:
+**CRITICAL**: Do not switch branches in the user's repo. If the active branch is the one to review, analyze it in place using `git diff`, `git log`, `git show`. If the active branch is NOT the target (for example when the active branch is `master`/`main` while the target is a feature branch), create a temporary git worktree pinned to the target branch and run all analysis there:
 
 ```bash
 WORKTREE_DIR=$(mktemp -d -t branch-review-XXXX)
@@ -76,7 +76,7 @@ Determine target branch (the branch this PR is merging INTO):
 
 - If a path argument was provided: trust it, no worktree.
 - Else if `REVIEW_BRANCH` matches the branch to review: analyze in place, no worktree.
-- Else (active branch is different — typical when cascaded from `/pr-review`): create a worktree at the branch to review per the worktree block in the CRITICAL section above. From this point on, `<path>` refers to that worktree path. Cleanup runs via the `trap` on exit.
+- Else (active branch is different): create a worktree at the branch to review per the worktree block in the CRITICAL section above. From this point on, `<path>` refers to that worktree path. Cleanup runs via the `trap` on exit.
 
 Find the merge base (the point where the branch being reviewed diverged from the target) and record the head being reviewed:
 
