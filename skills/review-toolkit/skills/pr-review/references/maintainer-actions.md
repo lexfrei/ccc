@@ -1,13 +1,13 @@
 # Maintainer actions around a review
 
-Applies when the reviewer has write access to the repository and to the PR branch (for a fork, the PR allows maintainer edits). Each action below is a write to someone else's branch or to the CI system: in this skill it is listed in the Step 8 draft and runs only in Step 9, after the user approved it.
+Applies when the reviewer has write access to the repository and to the PR branch (for a fork, the PR allows maintainer edits). Each action below is a write to someone else's branch or to the CI system: in this skill it is listed in the draft and runs only at publication, after the user approved it.
 
 ## Mechanical branch sync
 
 Never ask the author for a purely mechanical rebase, base sync, or history cleanup (dropping superseded commits, an empty commit GitHub inserted). Do it yourself:
 
 1. Locally, in a worktree, with your own signed commits and `--signoff`. Never the server-side "Update branch" button or `gh pr update-branch`: both create commits without your signature.
-2. Before pushing, check that `git rev-parse HEAD^{tree}` equals the first line of `git merge-tree --write-tree origin/<base> refs/pr-review/<N>`. A fork's branch is not on origin; the PR head ref from Step 1 is. A difference means the sync changed content and is no longer mechanical.
+2. Before pushing, check that `git rev-parse HEAD^{tree}` equals the first line of `git merge-tree --write-tree origin/<base> refs/pr-review/<N>`. A fork's branch is not on origin; the PR head ref from `preparation.md` is. A difference means the sync changed content and is no longer mechanical.
 3. Push with `--force-with-lease=<branch>:<old head sha>` after a rebase, plain push after a merge of the base.
 4. Verify `git range-diff` shows the author's commits as `=`, and that the new commits are signed and signed off.
 5. Tell the author the branch was updated.
